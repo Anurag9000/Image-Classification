@@ -358,6 +358,7 @@ class SimCLRArcFacePipeline:
 
 def main():
     print("✅ Keras backend is:", tf.keras.backend.backend())
+    print("🧠 Available GPUs:", tf.config.list_physical_devices('GPU'))
 
     parser = argparse.ArgumentParser(description="Train a model using SimCLR + ArcFace + CBAM + SupCon + MixUp pipeline")
     parser.add_argument('--steps', type=int, default=100, help='Number of SimCLR pretraining steps')
@@ -374,8 +375,8 @@ def main():
 
     # Normalize and resize to (224, 224)
     logging.info("📏 Resizing CIFAR-100 images to 224x224 for EfficientNetV2...")
-    X_train = tf.image.resize(tf.cast(X_train, tf.float32), [224, 224]).numpy() / 255.0
-    X_test  = tf.image.resize(tf.cast(X_test, tf.float32), [224, 224]).numpy() / 255.0
+    X_train = tf.image.resize(tf.cast(X_train, tf.float32), [224, 224]) / 255.0
+    X_test  = tf.image.resize(tf.cast(X_test, tf.float32), [224, 224])/ 255.0
 
     # Combine for unified preprocessing
     X = np.concatenate([X_train, X_test], axis=0)
