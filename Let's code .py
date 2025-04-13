@@ -76,35 +76,15 @@ class ArcMarginProduct(tf.keras.layers.Layer):
         output *= self.s
         return output
 
-
-
 class SimCLRArcFacePipeline:
-    def __init__(self, X, y_raw, num_classes=18):
-        self.X = X
-        self.y_raw = y_raw
+    def __init__(self, train_ds, val_ds, test_ds, num_classes=18):
+        self.train_ds = train_ds
+        self.val_ds = val_ds
+        self.test_ds = test_ds
         self.num_classes = num_classes
         self.simclr_model = self.create_simclr_projection_model()
         self.base_model = EfficientNetV2B0(include_top=False, weights='imagenet', pooling='avg', input_shape=(224, 224, 3))
         self.model = None
-        self.prepare_data()
-
-    def prepare_data(self):
-        X_train, X_temp, y_train, y_temp = train_test_split(self.X, self.y_raw, test_size=0.3, stratify=self.y_raw)
-        X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, stratify=y_temp)
-
-        y_train_cat = to_categorical(y_train, num_classes=self.num_classes)
-        y_val_cat = to_categorical(y_val, num_classes=self.num_classes)
-        y_test_cat = to_categorical(y_test, num_classes=self.num_classes)
-
-        self.X_train, self.y_train, self.y_val, self.y_test = X_train, y_train_cat, y_val_cat, y_test_cat
-        self.y_train_int = np.argmax(y_train_cat, axis=1)
-        self.y_val_int = np.argmax(y_val_cat, axis=1)
-        self.y_test_int = np.argmax(y_test_cat, axis=1)
-        self.X_test_final = X_test
-
-        # Compute class weights
-        class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(self.y_train_int), y=self.y_train_int)
-        self.class_weights = dict(enumerate(class_weights))
 
     def simclr_augment(self, image):
         image = tf.image.random_flip_left_right(image)
@@ -135,10 +115,11 @@ class SimCLRArcFacePipeline:
 
     def simclr_train(self, steps=100):
         optimizer = tf.keras.optimizers.Adam(1e-3)
-        for step in range(steps):
-            idx = np.random.choice(len(self.X_train), 32)
-            batch = tf.convert_to_tensor(self.X_train[idx], dtype=tf.float32)
-            labels = tf.convert_to_tensor(self.y_train_int[idx], dtype=tf.int32)
+        for step, (batch_images, batch_labels) in enumerate(self.train_ds.repeat()):
+            if step >= steps:
+                break
+            batch = tf.convert_to_tensor(batch_images, dtype=tf.float32)
+            labels = tf.convert_to_tensor(batch_labels, dtype=tf.int32)
 
             x1 = self.simclr_augment(batch)
             x2 = self.simclr_augment(batch)
@@ -174,7 +155,7 @@ class SimCLRArcFacePipeline:
         spatial_attention = Conv2D(1, kernel_size=7, padding='same', activation='sigmoid')(concat)
         x = Multiply()([x, spatial_attention])
         return x
-
+    
     def mixup(self, x, y, alpha=0.2):
         batch_size = tf.shape(x)[0]
         lam = np.random.beta(alpha, alpha)
@@ -182,25 +163,17 @@ class SimCLRArcFacePipeline:
         x_mix = lam * x + (1 - lam) * tf.gather(x, index)
         y_mix = lam * y + (1 - lam) * tf.gather(y, index)
         return x_mix, y_mix
-
+    
     def build_model(self):
-        # Freeze base model initially
         self.base_model.trainable = False
 
-        # Inputs
         image_input = Input(shape=(224, 224, 3), name='image_input')
         label_input = Input(shape=(), dtype='int32', name='label_input')
 
-        # Preprocess input for EfficientNet
         x = preprocess_input(image_input)
-
-        # Base CNN features
         features = self.base_model(x, training=False)
-
-        # ✅ CBAM Attention Block
         features = self.cbam_block(features)
 
-        # Fully connected head
         features = Dense(512, activation='relu', kernel_regularizer=regularizers.l2(0.001))(features)
         features = BatchNormalization()(features)
         features = Dropout(0.5)(features)
@@ -209,23 +182,23 @@ class SimCLRArcFacePipeline:
         features = BatchNormalization()(features)
         features = Dropout(0.3)(features)
 
-        # ArcFace final classification head
         arc_output = ArcMarginProduct(n_classes=self.num_classes)([features, label_input])
-
-        # Final model with two inputs (image, label), one output (logits for classification)
         self.model = Model(inputs=[image_input, label_input], outputs=arc_output)
 
-
     def train_model(self):
-        logging.info("Starting Supervised ArcFace Training with MixUp...")
+        logging.info("Starting Supervised ArcFace Training...")
 
-        # Apply MixUp on the full training set
-        x_mix, y_mix = self.mixup(self.X_train, self.y_train)
+        def mixup_batch(batch):
+            images, labels = batch
+            labels_one_hot = tf.one_hot(labels, depth=self.num_classes)
+            mixed_images, mixed_labels = self.mixup(images, labels_one_hot)
+            return (mixed_images, tf.argmax(mixed_labels, axis=1)), tf.argmax(mixed_labels, axis=1)
 
-        # Use integer labels for ArcFace (not one-hot)
-        y_mix_int = np.argmax(y_mix, axis=1)
+        mixed_train_ds = self.train_ds.map(mixup_batch, num_parallel_calls=tf.data.AUTOTUNE)
+        mixed_train_ds = mixed_train_ds.prefetch(tf.data.AUTOTUNE)
 
-        # Cosine learning rate scheduler
+        val_ds = self.val_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+
         lr_schedule = tf.keras.optimizers.schedules.CosineDecayRestarts(
             initial_learning_rate=1e-4,
             first_decay_steps=1000,
@@ -242,38 +215,27 @@ class SimCLRArcFacePipeline:
             metrics=['accuracy']
         )
 
-        # Callbacks
         callbacks = [
             EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-            # Optional if you want dynamic LR reduction based on plateaus
-            # ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3)
         ]
 
-        # Fit the model
         self.model.fit(
-            [x_mix, y_mix_int],  # [images, labels]
-            y_mix_int,           # ArcFace expects sparse int labels
-            validation_data=([self.X_test_final, self.y_val_int], self.y_val_int),
+            mixed_train_ds,
+            validation_data=val_ds,
             epochs=30,
-            class_weight=self.class_weights,
             callbacks=callbacks
         )
 
-        # Save checkpoints
-        os.makedirs(save_dir, exist_ok=True)
         self.model.save_weights(os.path.join(save_dir, "arcface_model_weights.h5"))
         self.model.save(os.path.join(save_dir, "arcface_full_model.tensorflow.keras"))
         logging.info(f"✅ Model saved to: {save_dir}")
 
     def fine_tune_model(self):
-        logging.info("🔁 Starting Fine-Tuning Phase 1: Unfreezing last 50 layers...")
+        logging.info("🔁 Fine-Tuning Phase 1: Unfreezing last 50 layers...")
 
-        # Phase 1: Unfreeze last 50 layers
         self.base_model.trainable = True
         for layer in self.base_model.layers[:-50]:
             layer.trainable = False
-        for layer in self.base_model.layers[-50:]:
-            layer.trainable = True
 
         lr_schedule_phase1 = tf.keras.optimizers.schedules.CosineDecayRestarts(
             initial_learning_rate=1e-5,
@@ -289,16 +251,18 @@ class SimCLRArcFacePipeline:
             metrics=['accuracy']
         )
 
+        val_ds = self.val_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+        train_ds = self.train_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+
         self.model.fit(
-            [self.X_train, self.y_train_int], self.y_train_int,
-            validation_data=([self.X_test_final, self.y_val_int], self.y_val_int),
+            train_ds,
+            validation_data=val_ds,
             epochs=10,
             callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)]
         )
 
-        logging.info("🧠 Starting Fine-Tuning Phase 2: Unfreezing all layers...")
+        logging.info("🧠 Fine-Tuning Phase 2: Unfreezing all layers...")
 
-        # Phase 2: Unfreeze all layers
         for layer in self.base_model.layers:
             layer.trainable = True
 
@@ -317,13 +281,12 @@ class SimCLRArcFacePipeline:
         )
 
         self.model.fit(
-            [self.X_train, self.y_train_int], self.y_train_int,
-            validation_data=([self.X_test_final, self.y_val_int], self.y_val_int),
+            train_ds,
+            validation_data=val_ds,
             epochs=10,
             callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)]
         )
 
-        # Save final fine-tuned model
         self.model.save_weights(os.path.join(save_dir, "arcface_model_weights.h5"))
         self.model.save(os.path.join(save_dir, "arcface_full_model.tensorflow.keras"))
         logging.info(f"✅ Final fine-tuned model saved to: {save_dir}")
@@ -331,19 +294,9 @@ class SimCLRArcFacePipeline:
     def evaluate_model(self):
         logging.info("📊 Evaluating final model on test set...")
 
-        # Get logits from ArcFace head
-        y_pred_logits = self.model.predict([self.X_test_final, self.y_test_int])
-        
-        # Convert logits to predicted labels
-        y_pred_labels = np.argmax(y_pred_logits, axis=1)
-
-        # Evaluate accuracy
-        test_acc = self.model.evaluate([self.X_test_final, self.y_test_int], self.y_test_int, verbose=0)
+        test_ds = self.test_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+        test_acc = self.model.evaluate(test_ds, verbose=0)
         logging.info(f"✅ Final Test Accuracy: {test_acc[1] * 100:.2f}%")
-
-        # Classification report
-        print("\n🧾 Classification Report:\n")
-        print(classification_report(self.y_test_int, y_pred_labels, digits=4))
 
     def run_pipeline(self):
         logging.info("🚀 Starting SimCLR Pretraining (Supervised Contrastive Learning)...")
@@ -375,44 +328,42 @@ def main():
     parser.add_argument('--steps', type=int, default=100, help='Number of SimCLR pretraining steps')
     args = parser.parse_args()
 
-    # ✅ Load CIFAR-100 from Keras API
+    # ✅ Load CIFAR-100
     logging.info("📂 Loading CIFAR-100 dataset (fine labels)...")
     from tensorflow.keras.datasets import cifar100
     (X_train, y_train), (X_test, y_test) = cifar100.load_data(label_mode='fine')
 
-    # Flatten labels
     y_train = y_train.flatten()
     y_test = y_test.flatten()
 
-    # Combine
+    # Combine and create full dataset
     X_all = np.concatenate([X_train, X_test], axis=0)
     y_all = np.concatenate([y_train, y_test], axis=0)
+    total_samples = len(X_all)
 
-    logging.info("🚀 Creating streaming dataset with resizing...")
-
-    # ✅ Streaming dataset with lazy preprocessing
     dataset = tf.data.Dataset.from_tensor_slices((X_all, y_all))
     dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-    dataset = dataset.batch(128).prefetch(tf.data.AUTOTUNE)
+    dataset = dataset.shuffle(buffer_size=10000)
+    dataset = dataset.batch(128)
+    dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
-    logging.info("✅ Dataset streaming ready. Extracting to memory-efficient arrays...")
+    # ✅ Split: 70% train, 15% val, 15% test
+    train_size = int(0.7 * total_samples)
+    val_size = int(0.15 * total_samples)
+    test_size = total_samples - train_size - val_size
 
-    # Option 1: Partial extract if you still need full array (batch-wise)
-    X = []
-    y = []
-    for x_batch, y_batch in dataset:
-        X.append(x_batch.numpy())
-        y.append(y_batch.numpy())
+    train_ds = dataset.take(train_size // 128)
+    val_ds = dataset.skip(train_size // 128).take(val_size // 128)
+    test_ds = dataset.skip((train_size + val_size) // 128)
 
-    X = np.concatenate(X, axis=0)
-    y = np.concatenate(y, axis=0)
+    logging.info("✅ Dataset split into Train / Val / Test")
 
-    logging.info(f"✅ Final shapes: X = {X.shape}, y = {y.shape}, num_classes = 100")
-
-    pipeline = SimCLRArcFacePipeline(X, y, num_classes=100)
+    # ✅ Run full training pipeline
+    pipeline = SimCLRArcFacePipeline(train_ds, val_ds, test_ds, num_classes=100)
     pipeline.run_pipeline()
 
     logging.info("🏁 Training complete.")
+
 
 if __name__ == "__main__":
     main()
