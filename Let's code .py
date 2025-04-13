@@ -32,6 +32,13 @@ os.makedirs(save_dir, exist_ok=True)
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
+def resize_generator(images, labels, size=(224, 224), batch_size=1000):
+    for i in range(0, len(images), batch_size):
+        batch_images = tf.image.resize(tf.cast(images[i:i+batch_size], tf.float32), size) / 255.0
+        batch_labels = labels[i:i+batch_size]
+        yield batch_images.numpy(), batch_labels
+
+
 class ArcMarginProduct(tf.keras.layers.Layer):
     def __init__(self, n_classes, s=30.0, m=0.50, easy_margin=False, **kwargs):
         super(ArcMarginProduct, self).__init__(**kwargs)
@@ -356,6 +363,10 @@ class SimCLRArcFacePipeline:
 
         logging.info("✅ Full training and evaluation pipeline completed.")
 
+def preprocess(image, label):
+    image = tf.image.resize(tf.cast(image, tf.float32), [224, 224]) / 255.0
+    return image, label
+
 def main():
     print("✅ Keras backend is:", tf.keras.backend.backend())
     print("🧠 Available GPUs:", tf.config.list_physical_devices('GPU'))
@@ -369,27 +380,39 @@ def main():
     from tensorflow.keras.datasets import cifar100
     (X_train, y_train), (X_test, y_test) = cifar100.load_data(label_mode='fine')
 
-    # Flatten y arrays
+    # Flatten labels
     y_train = y_train.flatten()
     y_test = y_test.flatten()
 
-    # Normalize and resize to (224, 224)
-    logging.info("📏 Resizing CIFAR-100 images to 224x224 for EfficientNetV2...")
-    X_train = tf.image.resize(tf.cast(X_train, tf.float32), [224, 224]) / 255.0
-    X_test  = tf.image.resize(tf.cast(X_test, tf.float32), [224, 224])/ 255.0
+    # Combine
+    X_all = np.concatenate([X_train, X_test], axis=0)
+    y_all = np.concatenate([y_train, y_test], axis=0)
 
-    # Combine for unified preprocessing
-    X = np.concatenate([X_train, X_test], axis=0)
-    y = np.concatenate([y_train, y_test], axis=0)
+    logging.info("🚀 Creating streaming dataset with resizing...")
 
-    logging.info(f"✅ Loaded CIFAR-100: X shape = {X.shape}, y shape = {y.shape}, num_classes = 100")
+    # ✅ Streaming dataset with lazy preprocessing
+    dataset = tf.data.Dataset.from_tensor_slices((X_all, y_all))
+    dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.batch(128).prefetch(tf.data.AUTOTUNE)
 
-    # Initialize and run pipeline
+    logging.info("✅ Dataset streaming ready. Extracting to memory-efficient arrays...")
+
+    # Option 1: Partial extract if you still need full array (batch-wise)
+    X = []
+    y = []
+    for x_batch, y_batch in dataset:
+        X.append(x_batch.numpy())
+        y.append(y_batch.numpy())
+
+    X = np.concatenate(X, axis=0)
+    y = np.concatenate(y, axis=0)
+
+    logging.info(f"✅ Final shapes: X = {X.shape}, y = {y.shape}, num_classes = 100")
+
     pipeline = SimCLRArcFacePipeline(X, y, num_classes=100)
     pipeline.run_pipeline()
 
     logging.info("🏁 Training complete.")
-
 
 if __name__ == "__main__":
     main()
