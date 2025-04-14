@@ -25,12 +25,45 @@ from tensorflow.keras.applications import EfficientNetV2B0
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+
+import keras_tuner as kt
+
 # Create directory to save models
 save_dir = "D:/arcface_model"
 os.makedirs(save_dir, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def build_tuned_model(hp):
+    arcface_m = hp.Float('arcface_margin', min_value=0.2, max_value=0.7, step=0.05)
+    arcface_s = hp.Choice('arcface_scale', values=[10.0, 30.0, 64.0])
+
+    dropout_rate = hp.Float('dropout', 0.3, 0.7, step=0.1)
+    dense_units = hp.Int('dense_units', min_value=128, max_value=512, step=64)
+
+    base_model = EfficientNetV2B0(include_top=False, weights='imagenet', pooling='avg', input_shape=(224, 224, 3))
+    base_model.trainable = False
+
+    image_input = Input(shape=(224, 224, 3), name='image_input')
+    label_input = Input(shape=(), dtype='int32', name='label_input')
+
+    x = preprocess_input(image_input)
+    features = base_model(x)
+    features = Dense(dense_units, activation='relu')(features)
+    features = Dropout(dropout_rate)(features)
+    
+    arc_output = ArcMarginProduct(n_classes=100, m=arcface_m, s=arcface_s)([features, label_input])
+    
+    model = Model(inputs=[image_input, label_input], outputs=arc_output)
+    model.compile(
+        optimizer=Adam(hp.Choice('lr', values=[1e-3, 1e-4, 1e-5])),
+        loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
+        metrics=['accuracy']
+    )
+    return model
 
 def resize_generator(images, labels, size=(224, 224), batch_size=1000):
     for i in range(0, len(images), batch_size):
@@ -164,6 +197,22 @@ class SimCLRArcFacePipeline:
         y_mix = lam * y + (1 - lam) * tf.gather(y, index)
         return x_mix, y_mix
     
+    def cutmix(self, x, y, alpha=1.0):
+        batch_size = tf.shape(x)[0]
+        lam = np.random.beta(alpha, alpha)
+        index = tf.random.shuffle(tf.range(batch_size))
+        x1 = tf.gather(x, index)
+        y1 = tf.gather(y, index)
+        rx = tf.random.uniform([], 0, 224, dtype=tf.int32)
+        ry = tf.random.uniform([], 0, 224, dtype=tf.int32)
+        rw = tf.random.uniform([], 0, 224 // 2, dtype=tf.int32)
+        rh = tf.random.uniform([], 0, 224 // 2, dtype=tf.int32)
+        x_cut = tf.identity(x)
+        x_cut[:, rx:rx+rw, ry:ry+rh, :] = x1[:, rx:rx+rw, ry:ry+rh, :]
+        lam_adjusted = 1 - (rw * rh) / (224 * 224)
+        y_mix = lam_adjusted * y + (1 - lam_adjusted) * y1
+        return x_cut, y_mix
+    
     def build_model(self):
         self.base_model.trainable = False
 
@@ -191,8 +240,15 @@ class SimCLRArcFacePipeline:
         def mixup_batch(batch):
             images, labels = batch
             labels_one_hot = tf.one_hot(labels, depth=self.num_classes)
-            mixed_images, mixed_labels = self.mixup(images, labels_one_hot)
+
+            # Choose MixUp or CutMix randomly
+            if tf.random.uniform([]) > 0.5:
+                mixed_images, mixed_labels = self.mixup(images, labels_one_hot)
+            else:
+                mixed_images, mixed_labels = self.cutmix(images, labels_one_hot)
+
             return (mixed_images, tf.argmax(mixed_labels, axis=1)), tf.argmax(mixed_labels, axis=1)
+
 
         mixed_train_ds = self.train_ds.map(mixup_batch, num_parallel_calls=tf.data.AUTOTUNE)
         mixed_train_ds = mixed_train_ds.prefetch(tf.data.AUTOTUNE)
@@ -211,7 +267,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=optimizer,
-            loss=SparseCategoricalCrossentropy(from_logits=True),
+            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
             metrics=['accuracy']
         )
 
@@ -247,7 +303,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=Adam(learning_rate=lr_schedule_phase1),
-            loss=SparseCategoricalCrossentropy(from_logits=True),
+            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
             metrics=['accuracy']
         )
 
@@ -276,7 +332,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=Adam(learning_rate=lr_schedule_phase2),
-            loss=SparseCategoricalCrossentropy(from_logits=True),
+            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
             metrics=['accuracy']
         )
 
@@ -294,9 +350,25 @@ class SimCLRArcFacePipeline:
     def evaluate_model(self):
         logging.info("📊 Evaluating final model on test set...")
 
-        test_ds = self.test_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
-        test_acc = self.model.evaluate(test_ds, verbose=0)
-        logging.info(f"✅ Final Test Accuracy: {test_acc[1] * 100:.2f}%")
+        y_true, y_pred = [], []
+        for (x, y) in self.test_ds.unbatch().take(1000):  # or full
+            pred = self.model.predict([[tf.expand_dims(x, 0)], [tf.expand_dims(y, 0)]], verbose=0)
+            y_true.append(y.numpy())
+            y_pred.append(np.argmax(pred))
+
+        # ✅ Classification report
+        print("\n📈 Classification Report:")
+        print(classification_report(y_true, y_pred, zero_division=0))
+
+        # ✅ Confusion matrix
+        cm = confusion_matrix(y_true, y_pred)
+        plt.figure(figsize=(14, 10))
+        sns.heatmap(cm, cmap='Blues', xticklabels=range(self.num_classes), yticklabels=range(self.num_classes), annot=False)
+        plt.title("Confusion Matrix")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.show()
+
 
     def run_pipeline(self):
         logging.info("🚀 Starting SimCLR Pretraining (Supervised Contrastive Learning)...")
@@ -316,6 +388,24 @@ class SimCLRArcFacePipeline:
 
         logging.info("✅ Full training and evaluation pipeline completed.")
 
+def compute_gradcam(model, image, label_index, conv_layer_name='efficientnetv2-b0'):
+    grad_model = tf.keras.models.Model(
+        inputs=[model.input],
+        outputs=[model.get_layer(conv_layer_name).output, model.output]
+    )
+    with tf.GradientTape() as tape:
+        conv_outputs, predictions = grad_model([tf.expand_dims(image, 0), tf.expand_dims(label_index, 0)])
+        loss = predictions[:, tf.argmax(predictions[0])]
+
+    grads = tape.gradient(loss, conv_outputs)[0]
+    weights = tf.reduce_mean(grads, axis=(0, 1))
+    cam = tf.reduce_sum(tf.multiply(weights, conv_outputs[0]), axis=-1)
+    cam = tf.maximum(cam, 0)
+    cam = tf.image.resize(tf.expand_dims(cam, -1), (224, 224)).numpy()
+    cam = cam / (np.max(cam) + 1e-8)
+    return cam
+
+
 def preprocess(image, label):
     image = tf.image.resize(tf.cast(image, tf.float32), [224, 224]) / 255.0
     return image, label
@@ -324,9 +414,25 @@ def main():
     print("✅ Keras backend is:", tf.keras.backend.backend())
     print("🧠 Available GPUs:", tf.config.list_physical_devices('GPU'))
 
-    parser = argparse.ArgumentParser(description="Train a model using SimCLR + ArcFace + CBAM + SupCon + MixUp pipeline")
-    parser.add_argument('--steps', type=int, default=100, help='Number of SimCLR pretraining steps')
-    args = parser.parse_args()
+    # tuner = kt.Hyperband(
+    # build_tuned_model,
+    # objective='val_accuracy',
+    # max_epochs=10,
+    # factor=3,
+    # directory='kerastuner_dir',
+    # project_name='arcface_cifar100'
+    # )
+
+    # val_ds = val_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+    # train_ds = train_ds.map(lambda x, y: ((x, y), y)).prefetch(tf.data.AUTOTUNE)
+
+    # tuner.search(train_ds, validation_data=val_ds, epochs=10)
+    # best_model = tuner.get_best_models(num_models=1)[0]
+
+
+    # parser = argparse.ArgumentParser(description="Train a model using SimCLR + ArcFace + CBAM + SupCon + MixUp pipeline")
+    # parser.add_argument('--steps', type=int, default=100, help='Number of SimCLR pretraining steps')
+    # args = parser.parse_args()
 
     # ✅ Load CIFAR-100
     logging.info("📂 Loading CIFAR-100 dataset (fine labels)...")
