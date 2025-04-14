@@ -60,7 +60,7 @@ def build_tuned_model(hp):
     model = Model(inputs=[image_input, label_input], outputs=arc_output)
     model.compile(
         optimizer=Adam(hp.Choice('lr', values=[1e-3, 1e-4, 1e-5])),
-        loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
+        loss=SparseCategoricalCrossentropy(from_logits=True),
         metrics=['accuracy']
     )
     return model
@@ -267,7 +267,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=optimizer,
-            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
+            loss=SparseCategoricalCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
 
@@ -303,7 +303,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=Adam(learning_rate=lr_schedule_phase1),
-            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
+            loss=SparseCategoricalCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
 
@@ -332,7 +332,7 @@ class SimCLRArcFacePipeline:
 
         self.model.compile(
             optimizer=Adam(learning_rate=lr_schedule_phase2),
-            loss=SparseCategoricalCrossentropy(from_logits=True, label_smoothing=0.1),
+            loss=SparseCategoricalCrossentropy(from_logits=True),
             metrics=['accuracy']
         )
 
