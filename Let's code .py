@@ -166,9 +166,8 @@ class SimCLRArcFacePipeline:
 
             grads = tape.gradient(loss, self.simclr_model.trainable_variables)
             optimizer.apply_gradients(zip(grads, self.simclr_model.trainable_variables))
-
-            if step % 10 == 0:
-                logging.info(f"SimCLR SupCon Step {step}: Loss = {loss.numpy():.4f}")
+            
+            logging.info(f"SimCLR SupCon Step {step}: Loss = {loss.numpy():.4f}")
 
     def cbam_block(self, input_tensor, reduction_ratio=8):
         channels = input_tensor.shape[-1]
@@ -279,7 +278,8 @@ class SimCLRArcFacePipeline:
             mixed_train_ds,
             validation_data=val_ds,
             epochs=30,
-            callbacks=callbacks
+            callbacks=callbacks,
+            verbose=1
         )
 
         self.model.save_weights(os.path.join(save_dir, "arcface_model_weights.h5"))
@@ -314,7 +314,8 @@ class SimCLRArcFacePipeline:
             train_ds,
             validation_data=val_ds,
             epochs=10,
-            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)]
+            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
+            verbose=1
         )
 
         logging.info("🧠 Fine-Tuning Phase 2: Unfreezing all layers...")
@@ -340,7 +341,8 @@ class SimCLRArcFacePipeline:
             train_ds,
             validation_data=val_ds,
             epochs=10,
-            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)]
+            callbacks=[EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)],
+            verbose=1
         )
 
         self.model.save_weights(os.path.join(save_dir, "arcface_model_weights.h5"))
@@ -411,6 +413,7 @@ def preprocess(image, label):
     return image, label
 
 def main():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     print("✅ Keras backend is:", tf.keras.backend.backend())
     print("🧠 Available GPUs:", tf.config.list_physical_devices('GPU'))
 
