@@ -24,6 +24,8 @@ from tensorflow.keras.utils import to_categorical
 from tensorflow.keras.applications import EfficientNetV2B0
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.datasets import cifar100
+
 
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
@@ -36,6 +38,9 @@ os.makedirs(save_dir, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Hyperparameters batch size definition define
+BATCH_SIZE = 32
 
 def build_tuned_model(hp):
     arcface_m = hp.Float('arcface_margin', min_value=0.2, max_value=0.7, step=0.05)
@@ -65,7 +70,7 @@ def build_tuned_model(hp):
     )
     return model
 
-def resize_generator(images, labels, size=(224, 224), batch_size=1000):
+def resize_generator(images, labels, size=(224, 224), batch_size=BATCH_SIZE):
     for i in range(0, len(images), batch_size):
         batch_images = tf.image.resize(tf.cast(images[i:i+batch_size], tf.float32), size) / 255.0
         batch_labels = labels[i:i+batch_size]
@@ -410,10 +415,12 @@ def compute_gradcam(model, image, label_index, conv_layer_name='efficientnetv2-b
 
 def preprocess(image, label):
     image = tf.image.resize(tf.cast(image, tf.float32), [224, 224]) / 255.0
+    label = tf.cast(label, tf.int32)  # ✅ Cast to int32
     return image, label
 
+
 def main():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     print("✅ Keras backend is:", tf.keras.backend.backend())
     print("🧠 Available GPUs:", tf.config.list_physical_devices('GPU'))
 
@@ -439,7 +446,6 @@ def main():
 
     # ✅ Load CIFAR-100
     logging.info("📂 Loading CIFAR-100 dataset (fine labels)...")
-    from tensorflow.keras.datasets import cifar100
     (X_train, y_train), (X_test, y_test) = cifar100.load_data(label_mode='fine')
 
     y_train = y_train.flatten()
@@ -453,7 +459,7 @@ def main():
     dataset = tf.data.Dataset.from_tensor_slices((X_all, y_all))
     dataset = dataset.map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
     dataset = dataset.shuffle(buffer_size=10000)
-    dataset = dataset.batch(128)
+    dataset = dataset.batch(BATCH_SIZE)
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
 
     # ✅ Split: 70% train, 15% val, 15% test
@@ -461,9 +467,9 @@ def main():
     val_size = int(0.15 * total_samples)
     test_size = total_samples - train_size - val_size
 
-    train_ds = dataset.take(train_size // 128)
-    val_ds = dataset.skip(train_size // 128).take(val_size // 128)
-    test_ds = dataset.skip((train_size + val_size) // 128)
+    train_ds = dataset.take(train_size // BATCH_SIZE)
+    val_ds = dataset.skip(train_size // BATCH_SIZE).take(val_size // BATCH_SIZE)
+    test_ds = dataset.skip((train_size + val_size) // BATCH_SIZE)
 
     logging.info("✅ Dataset split into Train / Val / Test")
 
