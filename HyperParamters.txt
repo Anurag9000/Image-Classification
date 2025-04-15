@@ -1,0 +1,67 @@
+### 🔧 **Full List of Hyperparameters in the Code (with Line Context)**
+
+#### 🟦 Constants / Global Hyperparameters
+- **`BATCH_SIZE = 32`**  
+  *Line ~26* → Controls batch size for training and preprocessing
+
+#### 🟦 Keras Tuner Hyperparameters (in `build_tuned_model`)
+- `hp.Float('arcface_margin', min_value=0.2, max_value=0.7, step=0.05)`  
+- `hp.Choice('arcface_scale', values=[10.0, 30.0, 64.0])`  
+- `hp.Float('dropout', 0.3, 0.7, step=0.1)`  
+- `hp.Int('dense_units', min_value=128, max_value=512, step=64)`  
+- `hp.Choice('lr', values=[1e-3, 1e-4, 1e-5])`  
+  *Line ~31–45* → These are used to tune model architecture and optimizer settings
+
+#### 🟦 `ArcMarginProduct` Custom Layer
+- `s=30.0`, `m=0.50`, `easy_margin=False`  
+  *Line ~88–100* → ArcFace loss hyperparameters controlling angular margin
+
+#### 🟦 SimCLR Pretraining
+- `temperature=0.1`  
+  *Line ~147* → Contrastive loss temperature  
+- `steps=100`  
+  *Line ~159* → Number of SimCLR training iterations
+
+#### 🟦 CBAM Attention Module
+- `reduction_ratio=8`  
+  *Line ~177* → Channel attention bottleneck ratio
+
+#### 🟦 Data Augmentation MixUp / CutMix
+- `alpha=0.2` for MixUp  
+  *Line ~185*  
+- `alpha=1.0` for CutMix  
+  *Line ~191*  
+- Patch size: `224`, CutMix uses random width/height: `rw = 0 to 112`  
+  *Line ~194–197*
+
+#### 🟦 Model Architecture
+- Dense layer: `Dense(512)`, `Dropout(0.5)`  
+- Dense layer: `Dense(128)`, `Dropout(0.3)`  
+- Regularization: `kernel_regularizer=regularizers.l2(0.001)`  
+  *Line ~205–212*
+
+#### 🟦 Training Configuration
+- `initial_learning_rate=1e-4` → First LR scheduler  
+- `first_decay_steps=1000`, `t_mul=2.0`, `m_mul=0.9`, `alpha=1e-5`  
+  *Line ~218–223*
+- `EarlyStopping(patience=5)`  
+  *Line ~226*
+
+#### 🟦 Fine-tuning Phase 1
+- Unfreeze last 50 layers: `for layer in self.base_model.layers[:-50]`  
+  *Line ~239*
+- Learning rate: `1e-5`, `first_decay_steps=500`, `alpha=1e-6`  
+  *Line ~242*
+
+#### 🟦 Fine-tuning Phase 2
+- Full unfreeze: `for layer in self.base_model.layers`  
+- Learning rate: `5e-6`, same decay config as phase 1  
+  *Line ~254*
+
+#### 🟦 Evaluation
+- `unbatch().take(1000)`  
+  *Line ~269* → Limit evaluation to 1000 samples for speed
+
+#### 🟦 Dataset Splits
+- Split ratio: `70% train`, `15% val`, `15% test`  
+  *Line ~323–327*
