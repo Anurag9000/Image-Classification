@@ -1,0 +1,19 @@
+# Ignore data, datasets, and large files
+data/
+dataset/
+*.zip
+*.tar
+*.h5
+*.pt
+
+# Python cache and temp files
+__pycache__/
+*.pyc
+*.pyo
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# VS Code and IDE files (optional)
+.vscode/
+.idea/
