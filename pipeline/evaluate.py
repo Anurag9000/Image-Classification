@@ -1,24 +1,27 @@
-# evaluate.py
-
 import torch
 import torch.nn.functional as F
 import numpy as np
 import logging
+import csv
+import os
 from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
 import matplotlib.pyplot as plt
+
 from backbone import HybridBackbone
 from losses import AdaFace
-from augmentations import mixup_cutmix_tokenmix, get_randaugment_transform
+from augmentations import mixup_cutmix_tokenmix
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class Evaluator:
-    def __init__(self, dataloader, num_classes=100):
+    def __init__(self, dataloader, num_classes=100, result_dir="./eval_results"):
         self.dataloader = dataloader
         self.num_classes = num_classes
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.result_dir = result_dir
+        os.makedirs(result_dir, exist_ok=True)
 
     def load_model(self, weight_path):
         model = HybridBackbone(use_cbam=True).to(self.device)
@@ -45,12 +48,11 @@ class Evaluator:
             elif use_tta:
                 preds = []
                 for _ in range(5):
-                    aug_imgs, y_a, y_b, lam = mixup_cutmix_tokenmix(images, labels, method='mixup')
+                    aug_imgs, y_a, _, _ = mixup_cutmix_tokenmix(images, labels, method='mixup')
                     with torch.no_grad():
                         features = model(aug_imgs)
                         logits = head(features, y_a)
-                        soft_logits = F.softmax(logits, dim=1)
-                        preds.append(soft_logits)
+                        preds.append(F.softmax(logits, dim=1))
                 avg_preds = torch.mean(torch.stack(preds), dim=0)
             else:
                 with torch.no_grad():
@@ -67,16 +69,39 @@ class Evaluator:
                 energy = torch.logsumexp(logits, dim=1)
                 energy_scores.extend(energy.cpu().numpy())
 
-        self._print_report(y_true, y_pred)
+        self._save_classification_report(y_true, y_pred)
         self._plot_confusion_matrix(y_true, y_pred)
+        self._save_predictions_csv(y_true, y_pred, y_conf)
 
         if ood_detection:
             self._plot_energy_histogram(energy_scores)
 
         return y_true, y_pred, y_conf
 
-    def _print_report(self, y_true, y_pred):
-        logging.info("\n" + classification_report(y_true, y_pred, zero_division=0))
+    def _save_predictions_csv(self, y_true, y_pred, confidences):
+        csv_path = os.path.join(self.result_dir, "predictions.csv")
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["y_true", "y_pred", "confidence"])
+            writer.writerows(zip(y_true, y_pred, confidences))
+        logging.info(f"\n Predictions saved to {csv_path}")
+
+    def _save_classification_report(self, y_true, y_pred):
+        report = classification_report(y_true, y_pred, zero_division=0, output_dict=True)
+        report_path = os.path.join(self.result_dir, "classification_report.csv")
+        with open(report_path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["class", "precision", "recall", "f1-score", "support"])
+            for cls, metrics in report.items():
+                if isinstance(metrics, dict):
+                    writer.writerow([
+                        cls,
+                        metrics.get("precision", 0),
+                        metrics.get("recall", 0),
+                        metrics.get("f1-score", 0),
+                        metrics.get("support", 0),
+                    ])
+        logging.info(f"\n Classification report saved to {report_path}")
 
     def _plot_confusion_matrix(self, y_true, y_pred):
         cm = confusion_matrix(y_true, y_pred)
@@ -85,7 +110,9 @@ class Evaluator:
         plt.title('Confusion Matrix')
         plt.xlabel('Predicted')
         plt.ylabel('Actual')
-        plt.show()
+        plt.savefig(os.path.join(self.result_dir, "confusion_matrix.png"))
+        plt.close()
+        logging.info("\n Confusion matrix saved.")
 
     def _plot_energy_histogram(self, energy_scores):
         plt.figure(figsize=(10, 6))
@@ -93,11 +120,12 @@ class Evaluator:
         plt.title("Energy-based OOD Detection Score Distribution")
         plt.xlabel("Energy Score")
         plt.ylabel("Frequency")
-        plt.show()
+        plt.savefig(os.path.join(self.result_dir, "ood_energy_distribution.png"))
+        plt.close()
+        logging.info("\n Energy-based histogram for OOD saved.")
 
 
 def calibrate_temperature(logits, labels):
-    """Temperature Scaling"""
     temperature = torch.tensor(1.0, requires_grad=True, device=logits.device)
     optimizer = torch.optim.LBFGS([temperature], lr=0.01, max_iter=50)
 
@@ -107,7 +135,7 @@ def calibrate_temperature(logits, labels):
         return loss
 
     optimizer.step(eval)
-    logging.info(f"Optimal Temperature: {temperature.item():.4f}")
+    logging.info(f"\n  Optimal Temperature: {temperature.item():.4f}")
     return temperature.item()
 
 
