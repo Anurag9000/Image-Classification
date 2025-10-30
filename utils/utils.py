@@ -1,115 +1,113 @@
-# utils.py
+"""
+Utility helpers for logging, checkpointing, and ensembling.
+"""
 
-import torch
+from __future__ import annotations
+
 import logging
 import os
 from pathlib import Path
-import torch.nn.functional as F
+from typing import Any, Dict, Optional
 
-# ------------------------------
-# Logger Setup
-# ------------------------------
-def setup_logger(log_file):
+import torch
+
+
+def setup_logger(log_file: str) -> None:
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 
-    ch = logging.StreamHandler()
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
+    if not any(isinstance(handler, logging.StreamHandler) for handler in logger.handlers):
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
 
-    fh = logging.FileHandler(log_file)
-    fh.setFormatter(formatter)
-    logger.addHandler(fh)
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
 
 
-# ------------------------------
-# Checkpoint Utilities
-# ------------------------------
-def save_checkpoint(state, filename="checkpoint.pth"):
+def save_checkpoint(state: dict, filename: str = "checkpoint.pth") -> None:
     torch.save(state, filename)
-    logging.info(f"✅ Checkpoint saved at {filename}")
+    logging.info("Checkpoint saved at %s", filename)
 
 
-def load_checkpoint(model, optimizer, filename="checkpoint.pth"):
-    if os.path.isfile(filename):
-        checkpoint = torch.load(filename, map_location='cuda')
-        model.load_state_dict(checkpoint['state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        logging.info(f"🔄 Checkpoint loaded from {filename}")
-    else:
-        logging.warning(f"⚠️ No checkpoint found at {filename}")
+def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, filename: str = "checkpoint.pth", device: Optional[torch.device] = None) -> None:
+    if not os.path.isfile(filename):
+        logging.warning("No checkpoint found at %s", filename)
+        return
+
+    device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(filename, map_location=device)
+    model.load_state_dict(checkpoint["state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    logging.info("Checkpoint loaded from %s", filename)
 
 
-# ------------------------------
-# AMP (Automatic Mixed Precision) Wrapper
-# ------------------------------
-class AMPWrapper:
-    def __init__(self):
-        self.scaler = torch.cuda.amp.GradScaler()
-
-    def backward(self, loss, optimizer):
-        self.scaler.scale(loss).backward()
-        self.scaler.step(optimizer)
-        self.scaler.update()
+def apply_swa(model: torch.nn.Module, swa_model: torch.nn.Module, swa_start: int, step: int, alpha: float = 0.01) -> None:
+    if step < swa_start:
+        return
+    for swa_param, param in zip(swa_model.parameters(), model.parameters()):
+        swa_param.data.mul_(1.0 - alpha).add_(param.data, alpha=alpha)
 
 
-# ------------------------------
-# Stochastic Weight Averaging (SWA) Utility
-# ------------------------------
-def apply_swa(model, swa_model, swa_start, step):
-    if step >= swa_start:
-        for swa_param, param in zip(swa_model.parameters(), model.parameters()):
-            swa_param.data.mul_(0.99).add_(0.01 * param.data)
-
-
-# ------------------------------
-# Snapshot Ensembling Utility
-# ------------------------------
-def save_snapshot(model, epoch, folder="./snapshots"):
+def save_snapshot(model: torch.nn.Module, epoch: int, folder: str = "./snapshots") -> None:
     Path(folder).mkdir(parents=True, exist_ok=True)
     snapshot_file = os.path.join(folder, f"snapshot_epoch_{epoch}.pth")
     torch.save(model.state_dict(), snapshot_file)
-    logging.info(f"📸 Snapshot saved at {snapshot_file}")
+    logging.info("Snapshot saved at %s", snapshot_file)
 
 
-# ------------------------------
-# Apply Gradient Centralization (GC)
-# ------------------------------
-def apply_gradient_centralization(optimizer):
-    for param_group in optimizer.param_groups:
-        for param in param_group['params']:
-            if param.grad is not None and len(param.shape) > 1:
-                param.grad.data.add_(-param.grad.data.mean(dim=tuple(range(1, len(param.shape))), keepdim=True))
-    return optimizer
-
-
-# ------------------------------
-# Apply Token Merging (ToMe) Utility
-# ------------------------------
-def apply_token_merging(vit_model, ratio=0.5):
+def apply_token_merging(vit_model: torch.nn.Module, ratio: float = 0.5) -> torch.nn.Module:
     try:
-        import tome
+        import tome  # type: ignore
     except ImportError:
-        logging.error("ToMe library not found. Install: pip install git+https://github.com/GeorgeCazenavette/tome.git")
+        logging.error("ToMe library not found. Install with: pip install git+https://github.com/GeorgeCazenavette/tome.git")
         return vit_model
 
     vit_model = tome.patch_vit(vit_model)
     vit_model.r = ratio
-    logging.info(f"ToMe activated with ratio {ratio}")
+    logging.info("ToMe activated with ratio %.2f", ratio)
     return vit_model
+
+
+def init_wandb(wandb_cfg: Optional[Dict]) -> Optional[Any]:
+    if not wandb_cfg or not wandb_cfg.get("enabled", False):
+        return None
+
+    try:
+        import wandb  # type: ignore
+    except ImportError:
+        logging.warning("W&B not installed. Install with: pip install wandb")
+        return None
+
+    run = wandb.init(
+        project=wandb_cfg.get("project", "image-classification"),
+        entity=wandb_cfg.get("entity"),
+        name=wandb_cfg.get("run_name"),
+        tags=wandb_cfg.get("tags"),
+        config=wandb_cfg.get("config"),
+        mode=wandb_cfg.get("mode", "online"),
+        resume=wandb_cfg.get("resume", False),
+    )
+    logging.info("Initialised Weights & Biases run: %s", run.name)
+    return run
 
 
 if __name__ == "__main__":
     Path("./logs").mkdir(parents=True, exist_ok=True)
     setup_logger("./logs/training.log")
 
-    dummy_model = torch.nn.Linear(10, 2).cuda()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    dummy_model = torch.nn.Linear(10, 2).to(device)
     dummy_optimizer = torch.optim.Adam(dummy_model.parameters())
 
-    save_checkpoint({
-        'state_dict': dummy_model.state_dict(),
-        'optimizer': dummy_optimizer.state_dict()
-    }, filename="test_checkpoint.pth")
+    save_checkpoint(
+        {
+            "state_dict": dummy_model.state_dict(),
+            "optimizer": dummy_optimizer.state_dict(),
+        },
+        filename="test_checkpoint.pth",
+    )
 
-    load_checkpoint(dummy_model, dummy_optimizer, filename="test_checkpoint.pth")
+    load_checkpoint(dummy_model, dummy_optimizer, filename="test_checkpoint.pth", device=device)

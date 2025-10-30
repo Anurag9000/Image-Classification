@@ -1,3 +1,127 @@
-training:
+logging:
+  file: ./logs/full_pipeline.log
+
+supcon:
+  enabled: true
+  batch_size: 16
+  image_size: 224
+  steps: 200
+  temperature: 0.07
+  num_views: 4
+  lr: 0.001
+  ema_decay: 0.9995
+  augmentations:
+    random_resized_crop: true
+    rrc_scale: [0.6, 1.0]
+    randaugment:
+      num_ops: 2
+      magnitude: 7
+    trivialaugment: true
+    normalize: true
+  backbone:
+    cnn_model: convnextv2_base
+    vit_model: dinov2_base14
+    token_merging_ratio: 0.3
+    lora_rank: 8
+    lora_alpha: 16
+    use_ia3: true
+    cnn_drop_path_rate: 0.1
+    vit_drop_path_rate: 0.2
+    mixstyle: true
+    mixstyle_p: 0.4
+    mixstyle_alpha: 0.1
+
+arcface:
   batch_size: 32
-  epochs: 100
+  num_classes: 100
+  epochs: 30
+  lr: 0.0001
+  gamma: 2.0
+  smoothing: 0.1
+  mix_method: mixup
+  use_curricularface: true
+  use_evidential: false
+  ema_decay: 0.9995
+  image_size: 224
+  use_manifold_mixup: true
+  manifold_mixup_alpha: 2.0
+  manifold_mixup_weight: 0.5
+  augmentations:
+    random_resized_crop: true
+    rrc_scale: [0.5, 1.0]
+    color_jitter:
+      brightness: 0.3
+      contrast: 0.3
+      saturation: 0.2
+      hue: 0.1
+    randaugment:
+      num_ops: 2
+      magnitude: 9
+    trivialaugment: true
+    random_erasing:
+      p: 0.25
+    normalize: true
+  backbone:
+    cnn_model: convnextv2_base
+    vit_model: eva02_base_patch14_224
+    fusion_dim: 1024
+    token_merging_ratio: 0.5
+    token_learner_tokens: 8
+    lora_rank: 8
+    lora_alpha: 16
+    lora_train_base: false
+    use_ia3: true
+    freeze_cnn: true
+    cnn_drop_path_rate: 0.1
+    vit_drop_path_rate: 0.35
+    mixstyle: true
+    mixstyle_p: 0.5
+    mixstyle_alpha: 0.1
+
+distill:
+  enabled: true
+  batch_size: 32
+  num_classes: 100
+  epochs: 10
+  lr: 0.000005
+  distill_weight: 0.3
+  mix_method: mixup
+  ema_decay: 0.9995
+  teacher_backbone_path: ./snapshots/snapshot_epoch_30.pth
+  teacher_head_path: ./snapshots/head/snapshot_epoch_30.pth
+  use_ema_teacher: true
+  use_manifold_mixup: true
+  manifold_mixup_alpha: 2.0
+  manifold_mixup_weight: 0.4
+  image_size: 224
+  augmentations:
+    random_resized_crop: true
+    rrc_scale: [0.6, 1.0]
+    randaugment:
+      num_ops: 2
+      magnitude: 5
+    normalize: true
+  backbone:
+    cnn_model: convnextv2_base
+    vit_model: dinov2_large14
+    token_merging_ratio: 0.4
+    lora_rank: 4
+    use_ia3: true
+    cnn_drop_path_rate: 0.1
+    vit_drop_path_rate: 0.25
+
+evaluation:
+  num_classes: 100
+  batch_size: 32
+  tta_runs: 5
+  topk: [1, 5]
+  compute_calibration: true
+  ood_detection: true
+  backbone_path: ./snapshots/snapshot_epoch_30.pth
+  head_path: ./snapshots/head/snapshot_epoch_30.pth
+  result_dir: ./eval_results
+  image_size: 224
+  augmentations:
+    normalize: true
+  backbone:
+    vit_model: eva02_base_patch14_224

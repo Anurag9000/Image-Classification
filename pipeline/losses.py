@@ -22,8 +22,11 @@ class AdaFace(nn.Module):
         self.register_buffer("batch_std", torch.tensor(100.0))
         self.momentum = 0.01
 
-    def forward(self, embeddings, labels):
+    def forward(self, embeddings, labels=None):
         cosine = F.linear(F.normalize(embeddings), F.normalize(self.weight))
+        if labels is None:
+            return cosine * self.s
+
         norm = torch.norm(embeddings, dim=1, keepdim=True).clamp(min=self.eps)
 
         with torch.no_grad():
@@ -58,8 +61,11 @@ class CurricularFace(nn.Module):
         self.s = scale
         self.t = nn.Parameter(torch.ones(1) * 0.0)
 
-    def forward(self, embeddings, labels):
+    def forward(self, embeddings, labels=None):
         cosine = F.linear(F.normalize(embeddings), F.normalize(self.weight))
+        if labels is None:
+            return cosine * self.s
+
         theta = torch.acos(cosine.clamp(-1 + 1e-7, 1 - 1e-7))
         target_cos = torch.cos(theta + self.m)
 

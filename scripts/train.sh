@@ -1,2 +1,4 @@
 #!/bin/bash
-python pipeline/train_arcface.py
+set -e
+
+python -m pipeline.run_pipeline --config configs/config.yaml "$@"
