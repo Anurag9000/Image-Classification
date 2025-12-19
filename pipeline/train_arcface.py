@@ -17,10 +17,10 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from augmentations import build_train_transform, mixup_cutmix_tokenmix
-from backbone import BackboneConfig, HybridBackbone
-from losses import AdaFace, CurricularFace, EvidentialLoss, FocalLoss
-from pipeline.optimizers import (
+from .augmentations import build_train_transform, mixup_cutmix_tokenmix
+from .backbone import BackboneConfig, HybridBackbone
+from .losses import AdaFace, CurricularFace, EvidentialLoss, FocalLoss
+from .optimizers import (
     Lookahead,
     ModelEMA,
     SAM,
@@ -56,6 +56,7 @@ class ArcFaceConfig:
     use_manifold_mixup: bool = False
     manifold_mixup_alpha: float = 2.0
     manifold_mixup_weight: float = 0.5
+    max_steps: Optional[int] = None
     wandb: dict = field(default_factory=dict)
 
 
@@ -66,6 +67,7 @@ class ArcFaceTrainer:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         os.makedirs(os.path.dirname(self.cfg.log_csv), exist_ok=True)
         os.makedirs(self.cfg.snapshot_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.cfg.snapshot_dir, "head"), exist_ok=True)
 
         self.backbone_cfg = BackboneConfig(**self.cfg.backbone)
         self.backbone = HybridBackbone(self.backbone_cfg).to(self.device)
@@ -83,7 +85,7 @@ class ArcFaceTrainer:
             self.trainable_params,
             torch.optim.AdamW,
             rho=self.cfg.rho,
-            adaptive=True,
+            adaptive=False,
             lr=self.cfg.lr,
             weight_decay=1e-4,
         )
@@ -94,7 +96,7 @@ class ArcFaceTrainer:
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.sam.base_optimizer,
             max_lr=self.cfg.lr * 10,
-            total_steps=total_steps,
+            total_steps=total_steps if total_steps > 0 else 1,
         )
 
         if self.cfg.use_evidential:
@@ -133,10 +135,18 @@ class ArcFaceTrainer:
         for epoch in range(1, self.cfg.epochs + 1):
             epoch_losses = []
             preds_all, labels_all = [], []
+            step_count = 0
 
             for images, labels in self.dataloader:
+                step_count += 1
+                if hasattr(self.cfg, "max_steps") and self.cfg.max_steps and step_count > self.cfg.max_steps:
+                    break
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
+
+                if labels.max() >= self.cfg.num_classes or labels.min() < 0:
+                    LOGGER.error(f"Labels out of range! Range: [{labels.min()}, {labels.max()}], num_classes: {self.cfg.num_classes}")
+                    raise ValueError(f"Invalid labels detected: {labels}")
 
                 mixed_x, y_a, y_b, lam = mixup_cutmix_tokenmix(images.clone(), labels, method=self.cfg.mix_method)
 
@@ -169,12 +179,8 @@ class ArcFaceTrainer:
 
                 if self.cfg.use_amp:
                     self.scaler.scale(loss_second).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
                 else:
                     loss_second.backward()
-
-                if self.cfg.grad_clip_norm:
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
 
                 self.sam.second_step(zero_grad=True, grad_scaler=self.scaler if self.cfg.use_amp else None)
                 self.optimizer.update_slow()
@@ -188,6 +194,9 @@ class ArcFaceTrainer:
                 epoch_losses.append(loss_second.item())
                 preds_all.extend(torch.argmax(logits.detach(), dim=1).cpu().numpy())
                 labels_all.extend(labels.cpu().numpy())
+
+                if len(epoch_losses) % 10 == 0:
+                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.dataloader)}] - Loss: {loss_second.item():.4f}")
 
             acc = accuracy_score(labels_all, preds_all)
             f1 = f1_score(labels_all, preds_all, average="macro")
@@ -226,10 +235,11 @@ def create_dataloader(
     image_size: int = 224,
     augmentations: Optional[dict] = None,
     root: str = "./data",
+    num_workers: int = 4,
 ) -> DataLoader:
     transform = build_train_transform(augmentations or {}, image_size=image_size, augment=augment)
     dataset = datasets.CIFAR100(root=root, train=True, download=True, transform=transform)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
 
 
 if __name__ == "__main__":

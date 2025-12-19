@@ -11,9 +11,9 @@ from PIL import Image
 
 import yaml
 
-from backbone import BackboneConfig, HybridBackbone
-from gradcam import GradCAM
-from losses import AdaFace
+from .backbone import BackboneConfig, HybridBackbone
+from .gradcam import GradCAM
+from .losses import AdaFace
 
 
 def load_model(
@@ -26,7 +26,7 @@ def load_model(
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     config = BackboneConfig(**(backbone_cfg or {}))
     model = HybridBackbone(config).to(device).eval()
-    head = AdaFace(1024, num_classes).to(device).eval()
+    head = AdaFace(config.fusion_dim, num_classes).to(device).eval()
 
     backbone_state = torch.load(backbone_path, map_location=device)
     if isinstance(backbone_state, dict) and "state_dict" in backbone_state:
@@ -137,3 +137,4 @@ if __name__ == "__main__":
         gradcam_dir=args.gradcam_dir,
         backbone_cfg=backbone_cfg,
     )
+

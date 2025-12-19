@@ -8,11 +8,11 @@ import yaml
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from augmentations import build_eval_transform
-from evaluate import EvaluationConfig, Evaluator
-from fine_tune_distill import DistillConfig, FineTuneDistillTrainer, create_distill_loader
-from train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader as create_arcface_loader
-from train_supcon import SupConConfig, SupConPretrainer, create_supcon_loader
+from .augmentations import build_eval_transform
+from .evaluate import EvaluationConfig, Evaluator
+from .fine_tune_distill import DistillConfig, FineTuneDistillTrainer, create_distill_loader
+from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader as create_arcface_loader
+from .train_supcon import SupConConfig, SupConPretrainer, create_supcon_loader
 from utils import setup_logger
 
 LOGGER = logging.getLogger(__name__)
@@ -28,10 +28,11 @@ def create_eval_loader(
     image_size: int = 224,
     augmentations: dict | None = None,
     root: str = "./data",
+    num_workers: int = 4,
 ) -> DataLoader:
     transform = build_eval_transform(augmentations or {}, image_size=image_size)
     dataset = datasets.CIFAR100(root=root, train=False, download=True, transform=transform)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+    return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
 
 def run_supcon_phase(cfg: dict) -> None:
@@ -45,7 +46,7 @@ def run_supcon_phase(cfg: dict) -> None:
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
-        num_workers=cfg.get("num_workers", 4),
+        num_workers=cfg.get("num_workers", 0),
     )
     supcon_cfg = SupConConfig(
         temperature=cfg.get("temperature", 0.07),
@@ -56,7 +57,9 @@ def run_supcon_phase(cfg: dict) -> None:
         backbone=cfg.get("backbone", {}),
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations", {}),
-        num_workers=cfg.get("num_workers", 4),
+        num_workers=cfg.get("num_workers", 0),
+        max_steps=cfg.get("max_steps"),
+        snapshot_path=cfg.get("snapshot_path", "./snapshots/supcon_final.pth"),
     )
     SupConPretrainer(loader, supcon_cfg).train()
 
@@ -69,6 +72,7 @@ def run_arcface_phase(cfg: dict) -> None:
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
+        num_workers=cfg.get("num_workers", 0),
     )
     arcface_cfg = ArcFaceConfig(
         num_classes=cfg.get("num_classes", 100),
@@ -87,6 +91,9 @@ def run_arcface_phase(cfg: dict) -> None:
         use_manifold_mixup=cfg.get("use_manifold_mixup", False),
         manifold_mixup_alpha=cfg.get("manifold_mixup_alpha", 2.0),
         manifold_mixup_weight=cfg.get("manifold_mixup_weight", 0.5),
+        max_steps=cfg.get("max_steps"),
+        snapshot_dir=cfg.get("snapshot_dir", "./snapshots"),
+        log_csv=cfg.get("log_csv", "./logs/arcface_metrics.csv"),
     )
     ArcFaceTrainer(loader, arcface_cfg).train()
 
@@ -102,7 +109,7 @@ def run_distill_phase(cfg: dict) -> None:
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
-        num_workers=cfg.get("num_workers", 4),
+        num_workers=cfg.get("num_workers", 0),
     )
     distill_cfg = DistillConfig(
         num_classes=cfg.get("num_classes", 100),
@@ -120,7 +127,10 @@ def run_distill_phase(cfg: dict) -> None:
         manifold_mixup_alpha=cfg.get("manifold_mixup_alpha", 2.0),
         manifold_mixup_weight=cfg.get("manifold_mixup_weight", 0.5),
         use_ema_teacher=cfg.get("use_ema_teacher", True),
-        num_workers=cfg.get("num_workers", 4),
+        num_workers=cfg.get("num_workers", 0),
+        max_steps=cfg.get("max_steps"),
+        snapshot_dir=cfg.get("snapshot_dir", "./snapshots_distill"),
+        log_csv=cfg.get("log_csv", "./logs/distill_metrics.csv"),
     )
     FineTuneDistillTrainer(loader, distill_cfg).train()
 
@@ -132,6 +142,7 @@ def run_evaluation_phase(cfg: dict) -> None:
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
+        num_workers=cfg.get("num_workers", 0),
     )
     eval_cfg = EvaluationConfig(
         result_dir=cfg.get("result_dir", "./eval_results"),
@@ -166,7 +177,13 @@ def run_pipeline(config_path: str, phases: List[str]) -> None:
         if runner is None:
             LOGGER.warning("Unknown phase '%s', skipping.", phase)
             continue
-        runner()
+        try:
+            runner()
+        except Exception as e:
+            LOGGER.error(f"Phase {phase} failed: {e}")
+            import traceback
+            LOGGER.error(traceback.format_exc())
+            raise
 
 
 def parse_args() -> argparse.Namespace:

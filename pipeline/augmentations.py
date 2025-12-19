@@ -75,8 +75,8 @@ def tokenmix(x, y, token_size=16):
     batch_size, _, h, w = x.size()
     index = torch.randperm(batch_size).to(x.device)
     cx = x.clone()
-    rx = np.random.randint(0, w, size=(1,)) // token_size * token_size
-    ry = np.random.randint(0, h, size=(1,)) // token_size * token_size
+    rx = np.random.randint(0, w) // token_size * token_size
+    ry = np.random.randint(0, h) // token_size * token_size
     cx[:, :, ry:ry + token_size, rx:rx + token_size] = cx[index, :, ry:ry + token_size, rx:rx + token_size]
     lam_adjusted = 1 - (token_size * token_size / (w * h))
     return cx, y, y[index], lam_adjusted

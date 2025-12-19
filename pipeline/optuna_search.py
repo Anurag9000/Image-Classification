@@ -6,7 +6,7 @@ from typing import Dict
 
 import optuna
 
-from train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader
+from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
@@ -130,3 +130,4 @@ if __name__ == "__main__":
     with open("best_arcface_params.txt", "w", encoding="utf-8") as f:
         for k, v in study.best_trial.params.items():
             f.write(f"{k}: {v}\n")
+

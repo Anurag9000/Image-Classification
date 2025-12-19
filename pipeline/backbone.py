@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm import create_model
 
-from pipeline.adapters import IA3Config, LoRAConfig, inject_ia3, inject_lora
+from .adapters import IA3Config, LoRAConfig, inject_ia3, inject_lora
 from utils import apply_token_merging
 
 
@@ -264,3 +264,5 @@ if __name__ == "__main__":
     dummy = torch.randn(2, 3, 224, 224).cuda()
     out = model(dummy)
     print("Output Shape:", out.shape)
+
+

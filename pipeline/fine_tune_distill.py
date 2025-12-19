@@ -14,10 +14,10 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from augmentations import build_train_transform, mixup_cutmix_tokenmix
-from backbone import BackboneConfig, HybridBackbone
-from losses import AdaFace, EvidentialLoss, FocalLoss
-from pipeline.optimizers import Lookahead, ModelEMA, SAM, apply_gradient_centralization
+from .augmentations import build_train_transform, mixup_cutmix_tokenmix
+from .backbone import BackboneConfig, HybridBackbone
+from .losses import AdaFace, EvidentialLoss, FocalLoss
+from .optimizers import Lookahead, ModelEMA, SAM, apply_gradient_centralization
 from utils import init_wandb, save_snapshot
 
 LOGGER = logging.getLogger(__name__)
@@ -48,6 +48,7 @@ class DistillConfig:
     manifold_mixup_weight: float = 0.5
     use_ema_teacher: bool = True
     num_workers: int = 4
+    max_steps: Optional[int] = None
     wandb: dict = field(default_factory=dict)
 
 
@@ -91,7 +92,7 @@ class FineTuneDistillTrainer:
             self.trainable_params,
             torch.optim.AdamW,
             rho=self.cfg.rho,
-            adaptive=True,
+            adaptive=False,
             lr=self.cfg.lr,
             weight_decay=1e-4,
         )
@@ -178,8 +179,12 @@ class FineTuneDistillTrainer:
         for epoch in range(1, self.cfg.epochs + 1):
             epoch_losses = []
             preds_all, labels_all = [], []
+            step_count = 0
 
             for images, labels in self.dataloader:
+                step_count += 1
+                if self.cfg.max_steps and step_count > self.cfg.max_steps:
+                    break
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
@@ -223,12 +228,8 @@ class FineTuneDistillTrainer:
 
                 if self.cfg.use_amp:
                     self.scaler.scale(loss_second).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
                 else:
                     loss_second.backward()
-
-                if self.cfg.grad_clip_norm:
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
 
                 self.sam.second_step(zero_grad=True, grad_scaler=self.scaler if self.cfg.use_amp else None)
                 self.optimizer.update_slow()
@@ -241,6 +242,9 @@ class FineTuneDistillTrainer:
                 epoch_losses.append(loss_second.item())
                 preds_all.extend(torch.argmax(student_logits.detach(), dim=1).cpu().numpy())
                 labels_all.extend(labels.cpu().numpy())
+ 
+                if len(epoch_losses) % 10 == 0:
+                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.dataloader)}] - Loss: {loss_second.item():.4f}")
 
             acc = accuracy_score(labels_all, preds_all)
             f1 = f1_score(labels_all, preds_all, average="macro")
@@ -298,3 +302,4 @@ if __name__ == "__main__":
     loader = create_distill_loader()
     trainer = FineTuneDistillTrainer(loader, DistillConfig())
     trainer.train()
+

@@ -7,7 +7,9 @@ Reference:
 
 from __future__ import annotations
 
-import torch
+import functools
+import types
+from typing import Iterable, Any
 
 
 def apply_gradient_centralization(optimizer: torch.optim.Optimizer) -> torch.optim.Optimizer:
@@ -25,10 +27,11 @@ def apply_gradient_centralization(optimizer: torch.optim.Optimizer) -> torch.opt
 
     original_step = optimizer.step
 
-    def gc_step(*args, **kwargs):
+    @functools.wraps(original_step)
+    def gc_step(self, *args: Any, **kwargs: Any) -> Any:
         centralize()
         return original_step(*args, **kwargs)
 
-    optimizer.step = gc_step  # type: ignore[assignment]
+    optimizer.step = types.MethodType(gc_step, optimizer)  # type: ignore[assignment]
     return optimizer
 

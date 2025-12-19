@@ -8,7 +8,7 @@ from typing import Optional
 
 import torch
 
-from backbone import BackboneConfig, HybridBackbone
+from .backbone import BackboneConfig, HybridBackbone
 
 LOGGER = logging.getLogger(__name__)
 
@@ -118,3 +118,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

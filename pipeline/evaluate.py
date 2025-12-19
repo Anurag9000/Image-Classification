@@ -14,8 +14,8 @@ import torch
 import torch.nn.functional as F
 from sklearn.metrics import classification_report, confusion_matrix
 
-from backbone import BackboneConfig, HybridBackbone
-from losses import AdaFace
+from .backbone import BackboneConfig, HybridBackbone
+from .losses import AdaFace
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class Evaluator:
     ):
         backbone_cfg = BackboneConfig(**self.cfg.backbone)
         model = HybridBackbone(backbone_cfg).to(self.device)
-        head = AdaFace(1024, self.num_classes).to(self.device)
+        head = AdaFace(backbone_cfg.fusion_dim, self.num_classes).to(self.device)
 
         backbone_state = torch.load(backbone_path, map_location=self.device)
         if isinstance(backbone_state, dict) and "state_dict" in backbone_state:
@@ -340,3 +340,4 @@ if __name__ == "__main__":
     evaluator = Evaluator(dataloader, num_classes=100)
     model, head = evaluator.load_model("snapshots/snapshot_epoch_30.pth", head_path="snapshots/head/snapshot_epoch_30.pth")
     evaluator.evaluate(model, head)
+

@@ -13,6 +13,10 @@ import torch
 
 
 def setup_logger(log_file: str) -> None:
+    log_dir = os.path.dirname(log_file)
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
