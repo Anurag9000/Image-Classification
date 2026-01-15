@@ -1,6 +1,0 @@
-2026-01-15 22:43:15,094 - INFO - ===> Starting ArcFace Training Phase
-2026-01-15 22:43:15,094 - INFO - Using CombinedFilesDataset with roots: ['d:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 3.v1-garbage-classification.multiclass', 'd:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 3.v2-gc1.multiclass']
-2026-01-15 22:43:24,882 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
-2026-01-15 22:43:25,280 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
-2026-01-15 22:43:25,867 - INFO - Loading pretrained weights from Hugging Face hub (timm/swin_tiny_patch4_window7_224.ms_in1k)
-2026-01-15 22:43:26,137 - INFO - [timm/swin_tiny_patch4_window7_224.ms_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.

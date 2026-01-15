@@ -1,7 +1,0 @@
-2026-01-15 19:40:53,339 - INFO - SupCon phase disabled, skipping.
-2026-01-15 19:40:53,340 - INFO - ===> Starting ArcFace Training Phase
-2026-01-15 19:40:59,722 - INFO - Epoch 1/2 - Loss: nan | Acc: 0.0000 | F1: 0.0000
-2026-01-15 19:40:59,990 - INFO - Snapshot saved at ./snapshots_smoke_early\snapshot_epoch_1.pth
-2026-01-15 19:40:59,992 - INFO - Snapshot saved at ./snapshots_smoke_early\head\snapshot_epoch_1.pth
-2026-01-15 19:41:00,177 - INFO - Snapshot saved at ./snapshots_smoke_early\ema\backbone\snapshot_epoch_1.pth
-2026-01-15 19:41:00,208 - INFO - Snapshot saved at ./snapshots_smoke_early\ema\head\snapshot_epoch_1.pth
