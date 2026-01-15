@@ -18,7 +18,7 @@ from .augmentations import build_train_transform, mixup_cutmix_tokenmix
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import AdaFace, EvidentialLoss, FocalLoss
 from .optimizers import Lookahead, ModelEMA, SAM, apply_gradient_centralization
-from utils import init_wandb, save_snapshot
+from utils import init_wandb, save_snapshot, EarlyStopping
 
 LOGGER = logging.getLogger(__name__)
 
@@ -50,12 +50,15 @@ class DistillConfig:
     num_workers: int = 4
     max_steps: Optional[int] = None
     wandb: dict = field(default_factory=dict)
+    early_stopping_patience: int = 5
+    val_split: float = 0.1
 
 
 class FineTuneDistillTrainer:
-    def __init__(self, dataloader: DataLoader, config: Optional[DistillConfig] = None):
+    def __init__(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, config: Optional[DistillConfig] = None):
         self.cfg = config or DistillConfig()
-        self.dataloader = dataloader
+        self.train_loader = train_loader
+        self.val_loader = val_loader
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         os.makedirs(self.cfg.snapshot_dir, exist_ok=True)
@@ -99,12 +102,14 @@ class FineTuneDistillTrainer:
         apply_gradient_centralization(self.sam.base_optimizer)
         self.optimizer = Lookahead(self.sam)
 
-        total_steps = self.cfg.epochs * len(self.dataloader)
+        total_steps = self.cfg.epochs * len(self.train_loader)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.sam.base_optimizer,
             max_lr=self.cfg.lr * 2,
             total_steps=total_steps if total_steps > 0 else 1,
         )
+
+        self.early_stopper = EarlyStopping(patience=self.cfg.early_stopping_patience, verbose=True, path=os.path.join(self.cfg.snapshot_dir, "best_model.pth"))
 
         if self.cfg.use_evidential:
             self.criterion = EvidentialLoss(num_classes=self.cfg.num_classes)
@@ -172,6 +177,32 @@ class FineTuneDistillTrainer:
         if self.head_ema:
             self.head_ema.update(self.head)
 
+    def _validate(self) -> float:
+        if not self.val_loader:
+            return 0.0
+
+        self.backbone.eval()
+        self.head.eval()
+        val_loss = 0.0
+        val_steps = 0
+
+        with torch.no_grad():
+            for images, labels in self.val_loader:
+                images = images.to(self.device, non_blocking=True)
+                labels = labels.to(self.device, non_blocking=True)
+
+                features = self.backbone(images)
+                logits = self.head(features, labels)
+                # Validation metric: Just the main criterion (e.g. Focal/CrossEntropy) against labels
+                loss = self.criterion(logits, labels)
+                val_loss += loss.item()
+                val_steps += 1
+
+        avg_val_loss = val_loss / max(val_steps, 1)
+        self.backbone.train()
+        self.head.train()
+        return avg_val_loss
+
     def train(self):
         self.backbone.train()
         self.head.train()
@@ -181,7 +212,7 @@ class FineTuneDistillTrainer:
             preds_all, labels_all = [], []
             step_count = 0
 
-            for images, labels in self.dataloader:
+            for images, labels in self.train_loader:
                 step_count += 1
                 if self.cfg.max_steps and step_count > self.cfg.max_steps:
                     break
@@ -281,6 +312,16 @@ class FineTuneDistillTrainer:
                     folder=os.path.join(self.cfg.snapshot_dir, "ema", "head"),
                 )
 
+            val_loss = self._validate()
+            LOGGER.info(f"Epoch {epoch} Validation Loss: {val_loss:.4f}")
+            if self.wandb_run:
+                self.wandb_run.log({"distill/val_loss": val_loss}, step=epoch)
+
+            self.early_stopper(val_loss, self.backbone) # Saving backbone is enough, typically
+            if self.early_stopper.early_stop:
+                LOGGER.info("Early stopping triggered")
+                break
+
         if self.wandb_run:
             self.wandb_run.finish()
 
@@ -291,15 +332,28 @@ def create_distill_loader(
     augmentations: Optional[dict] = None,
     root: str = "./data",
     num_workers: int = 4,
-) -> DataLoader:
+    val_split: float = 0.1,
+) -> tuple[DataLoader, Optional[DataLoader]]:
     transform = build_train_transform(augmentations or {}, image_size=image_size, augment=True)
     dataset = datasets.CIFAR100(root=root, train=True, download=True, transform=transform)
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+
+    if val_split > 0.0:
+        val_size = int(len(dataset) * val_split)
+        train_size = len(dataset) - val_size
+        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    else:
+        train_dataset = dataset
+        val_dataset = None
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True) if val_dataset else None
+
+    return train_loader, val_loader
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    loader = create_distill_loader()
-    trainer = FineTuneDistillTrainer(loader, DistillConfig())
+    train_loader, val_loader = create_distill_loader()
+    trainer = FineTuneDistillTrainer(train_loader, val_loader, DistillConfig())
     trainer.train()
 

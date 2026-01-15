@@ -115,3 +115,39 @@ if __name__ == "__main__":
     )
 
     load_checkpoint(dummy_model, dummy_optimizer, filename="test_checkpoint.pth", device=device)
+
+
+class EarlyStopping:
+    def __init__(self, patience: int = 5, min_delta: float = 0.0, path: str = "checkpoint.pth", verbose: bool = False):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.path = path
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = float("inf")
+
+    def __call__(self, val_loss: float, model: torch.nn.Module):
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.min_delta:
+            self.counter += 1
+            if self.verbose:
+                logging.info(f"EarlyStopping counter: {self.counter} out of {self.patience}")
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss: float, model: torch.nn.Module):
+        if self.verbose:
+            logging.info(f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...")
+        torch.save(model.state_dict(), self.path)
+        self.val_loss_min = val_loss
+

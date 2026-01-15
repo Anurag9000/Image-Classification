@@ -64,16 +64,29 @@ def run_supcon_phase(cfg: dict) -> None:
     SupConPretrainer(loader, supcon_cfg).train()
 
 
+from pipeline.files_dataset import create_garbage_loader
+
 def run_arcface_phase(cfg: dict) -> None:
     LOGGER.info("===> Starting ArcFace Training Phase")
-    loader = create_arcface_loader(
-        batch_size=cfg.get("batch_size", 32),
-        augment=cfg.get("augment", True),
-        image_size=cfg.get("image_size", 224),
-        augmentations=cfg.get("augmentations"),
-        root=cfg.get("data_root", "./data"),
-        num_workers=cfg.get("num_workers", 0),
-    )
+    
+    if "dataset" in cfg and "root_dirs" in cfg["dataset"]:
+        LOGGER.info(f"Using CombinedFilesDataset with roots: {cfg['dataset']['root_dirs']}")
+        train_loader, val_loader = create_garbage_loader(
+            root_dirs=cfg["dataset"]["root_dirs"],
+            batch_size=cfg["dataset"].get("batch_size", 32),
+            num_workers=cfg["dataset"].get("num_workers", 4),
+            val_split=cfg["dataset"].get("val_split", 0.0)
+        )
+    else:
+        train_loader, val_loader = create_arcface_loader(
+            batch_size=cfg.get("batch_size", 32),
+            augment=cfg.get("augment", True),
+            image_size=cfg.get("image_size", 224),
+            augmentations=cfg.get("augmentations"),
+            root=cfg.get("data_root", "./data"),
+            num_workers=cfg.get("num_workers", 0),
+            val_split=cfg.get("val_split", 0.1),
+        )
     arcface_cfg = ArcFaceConfig(
         num_classes=cfg.get("num_classes", 100),
         lr=cfg.get("lr", 1e-4),
@@ -94,8 +107,11 @@ def run_arcface_phase(cfg: dict) -> None:
         max_steps=cfg.get("max_steps"),
         snapshot_dir=cfg.get("snapshot_dir", "./snapshots"),
         log_csv=cfg.get("log_csv", "./logs/arcface_metrics.csv"),
+        early_stopping_patience=cfg.get("early_stopping_patience", 5),
+        val_split=cfg.get("val_split", 0.1),
+        use_amp=cfg.get("use_amp", True),
     )
-    ArcFaceTrainer(loader, arcface_cfg).train()
+    ArcFaceTrainer(train_loader, val_loader, arcface_cfg).train()
 
 
 def run_distill_phase(cfg: dict) -> None:
@@ -104,12 +120,13 @@ def run_distill_phase(cfg: dict) -> None:
         return
 
     LOGGER.info("===> Starting Fine-Tune + Distillation Phase")
-    loader = create_distill_loader(
+    train_loader, val_loader = create_distill_loader(
         batch_size=cfg.get("batch_size", 32),
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
         num_workers=cfg.get("num_workers", 0),
+        val_split=cfg.get("val_split", 0.1),
     )
     distill_cfg = DistillConfig(
         num_classes=cfg.get("num_classes", 100),
@@ -131,8 +148,10 @@ def run_distill_phase(cfg: dict) -> None:
         max_steps=cfg.get("max_steps"),
         snapshot_dir=cfg.get("snapshot_dir", "./snapshots_distill"),
         log_csv=cfg.get("log_csv", "./logs/distill_metrics.csv"),
+        early_stopping_patience=cfg.get("early_stopping_patience", 5),
+        val_split=cfg.get("val_split", 0.1),
     )
-    FineTuneDistillTrainer(loader, distill_cfg).train()
+    FineTuneDistillTrainer(train_loader, val_loader, distill_cfg).train()
 
 
 def run_evaluation_phase(cfg: dict) -> None:
@@ -161,15 +180,105 @@ def run_evaluation_phase(cfg: dict) -> None:
     LOGGER.info("Evaluation metrics: %s", metrics)
 
 
+def evaluate_with_tta(cfg: dict, snapshot_dir: str):
+    from pipeline.files_dataset import create_garbage_test_loader
+    from metrics.evaluator import Evaluator # Assuming Evaluator exists or we use sklearn directly as planned
+    import torch
+    import os
+    import numpy as np
+    from sklearn.metrics import accuracy_score
+    from pipeline.train_arcface import ArcFaceTrainer
+    from configs.config import ArcFaceConfig
+
+    LOGGER.info("===> Starting TTA Evaluation")
+    
+    snapshot_path = os.path.join(snapshot_dir, f"{cfg.get('project_name', 'arcface')}_best.pth")
+    if not os.path.exists(snapshot_path):
+        LOGGER.warning(f"Best snapshot not found at {snapshot_path}, trying final...")
+        snapshot_path = os.path.join(snapshot_dir, f"{cfg.get('project_name', 'arcface')}_final.pth")
+    
+    if not os.path.exists(snapshot_path):
+        # Fallback to standard snapshot naming if project name based one missing
+        snapshot_path = os.path.join(snapshot_dir, "backbone_best.pth")
+        if not os.path.exists(snapshot_path):
+             LOGGER.error("No snapshot found for TTA evaluation.")
+             return
+
+    LOGGER.info(f"Loading snapshot from {snapshot_path}")
+
+    arc_cfg = cfg.get("arcface", {})
+    trainer_cfg = ArcFaceConfig(
+        num_classes=arc_cfg.get("num_classes", 6),
+        backbone=arc_cfg.get("backbone", "resnet50"),
+        embedding_size=arc_cfg.get("embedding_size", 512),
+        image_size=arc_cfg.get("image_size", 224),
+    )
+    
+    trainer = ArcFaceTrainer(dataloader=None, config=trainer_cfg)
+    
+    checkpoint = torch.load(snapshot_path, map_location=trainer.device)
+    # Checkpoint loading logic similar to EarlyStopping or standard
+    if "model_state_dict" in checkpoint: # EarlyStopping format
+        trainer.backbone.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        if "head_state_dict" in checkpoint:
+            trainer.head.load_state_dict(checkpoint["head_state_dict"], strict=False)
+    elif "backbone" in checkpoint: # Standard utils.save_snapshot format
+        trainer.backbone.load_state_dict(checkpoint["backbone"])
+        if "head" in checkpoint:
+            trainer.head.load_state_dict(checkpoint["head"])
+    
+    trainer.backbone.eval()
+    trainer.head.eval()
+    
+    device = trainer.device
+    
+    # Check if dataset root_dirs exist
+    if "dataset" not in cfg or "root_dirs" not in cfg["dataset"]:
+        LOGGER.error("Dataset configuration missing for TTA.")
+        return
+
+    test_loader = create_garbage_test_loader(
+        root_dirs=cfg["dataset"]["root_dirs"],
+        batch_size=cfg["dataset"].get("batch_size", 32),
+        num_workers=cfg["dataset"].get("num_workers", 4)
+    )
+    
+    all_preds = []
+    all_labels = []
+    
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+            
+            # TTA: Original + Flip
+            feats1 = trainer.backbone(images)
+            logits1 = trainer.head(feats1, labels) 
+            
+            images_flipped = torch.flip(images, dims=[3])
+            feats2 = trainer.backbone(images_flipped)
+            logits2 = trainer.head(feats2, labels)
+            
+            avg_logits = (logits1 + logits2) / 2
+            preds = torch.argmax(avg_logits, dim=1).cpu().numpy()
+            
+            all_preds.extend(preds)
+            all_labels.extend(labels.cpu().numpy())
+            
+    acc = accuracy_score(all_labels, all_preds)
+    LOGGER.info(f"TTA Evaluation Accuracy: {acc:.4f}")
+
+
 def run_pipeline(config_path: str, phases: List[str]) -> None:
     cfg = load_config(config_path)
     setup_logger(cfg.get("logging", {}).get("file", "./logs/full_pipeline.log"))
 
     phase_map = {
         "supcon": lambda: run_supcon_phase(cfg.get("supcon", {})),
-        "arcface": lambda: run_arcface_phase(cfg.get("arcface", {})),
+        "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
         "distill": lambda: run_distill_phase(cfg.get("distill", {})),
         "evaluate": lambda: run_evaluation_phase(cfg.get("evaluation", {})),
+        "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
     }
 
     for phase in phases:
@@ -192,8 +301,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phases",
         nargs="+",
-        choices=["supcon", "arcface", "distill", "evaluate"],
-        default=["supcon", "arcface", "distill", "evaluate"],
+        choices=["supcon", "arcface", "distill", "evaluate", "tta"],
+        default=["supcon", "arcface", "distill", "evaluate", "tta"],
         help="Pipeline phases to execute in order.",
     )
     return parser.parse_args()

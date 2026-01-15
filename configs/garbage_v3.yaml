@@ -1,0 +1,32 @@
+project_name: "Garbage_Classification_v3"
+experiment_name: "Combined_ArcFace_AdvancedAug"
+
+# Data
+dataset:
+  root_dirs:
+    - "d:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 3.v1-garbage-classification.multiclass"
+    - "d:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 3.v2-gc1.multiclass"
+  batch_size: 32
+  num_workers: 0
+  val_split: 0.0 # Using explicit 'valid' folders present in data
+
+# Training
+epochs: 15
+lr: 1.0e-4
+weight_decay: 1e-4
+early_stopping_patience: 3
+use_amp: false
+
+# Augmentations (Hyperparams)
+augmentations:
+  warp_prob: 0.3
+  cutmix_prob: 0.5
+  cutmix_alpha: 1.0
+
+# Model
+backbone: 
+  cnn_model: "resnet50"
+  vit_model: "swin_tiny_patch4_window7_224"
+  pretrained: true
+embedding_size: 512
+num_classes: 6

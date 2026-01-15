@@ -6,6 +6,7 @@ from .utils import (
     save_checkpoint,
     save_snapshot,
     setup_logger,
+    EarlyStopping,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "save_checkpoint",
     "save_snapshot",
     "setup_logger",
+    "EarlyStopping",
 ]
