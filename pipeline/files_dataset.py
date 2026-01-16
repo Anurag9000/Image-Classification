@@ -108,11 +108,12 @@ def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
             A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=30, p=0.5),
             
             # Advanced Augmentations requested by user
-            A.OneOf([
-                A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
-                A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
-                A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
-            ], p=0.3), # 30% chance to apply one of the warping/morphing effects
+            # Heavy augmentations removed for speed optimization on single-thread loader
+            # A.OneOf([
+            #     A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
+            #     A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
+            #     A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
+            # ], p=0.3),
 
             A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=0.3),
             A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.3),
