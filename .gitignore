@@ -1,7 +1,9 @@
 # Ignore data, datasets, and large files
-data/
+data/*
+!data/*.zip
 dataset/
-*.zip
+# *.zip # Commented out to allow zip if needed, or specific exception
+
 *.tar
 *.h5
 *.pt
