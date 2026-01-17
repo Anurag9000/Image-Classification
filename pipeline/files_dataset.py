@@ -213,61 +213,24 @@ def create_garbage_loader(
         
         print(f"Splitting dataset: Train={lengths[0]}, Val={lengths[1]}, Test={lengths[2]}")
         
-        # Use a fixed generator for reproducible splits if desired, but default random is fine for now
-        train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(
-            full_dataset, lengths, generator=torch.Generator().manual_seed(42)
-        )
-        
-        # NOTE: Torch subsets don't easily allow changing transform *after* split if underlying dataset is shared.
-        # But 'full_dataset' has train_transform.
-        # Ideally, we want val/test to use val_transform (no aug).
-        # We can wrap them or rely on the fact that robust models often handle dirty validation fine.
-        # For correctness, let's leave as is for now (augmented validation/test isn't terrible, but standard is clean)
-        # To fix properly requires a wrapper Dataset that overrides transform.
-        # Let's add a quick wrapper class here to ensure Test/Val are clean.
-        class TransformWrapper(Dataset):
-            def __init__(self, subset, transform):
-                self.subset = subset
-                self.transform = transform
-            def __len__(self): return len(self.subset)
-            def __getitem__(self, idx):
-                # Retrieve underlying item. JsonDataset returns (img, label). 
-                # Wait, JsonDataset applies transform internally. We can't revert it easily.
-                # Solution: Initialize JsonDataset with *NO* transform, then apply in wrapper.
-                # But JsonDataset code above applies transform inside __getitem__.
-                # We should instantiate JsonDataset with helper mode or handle it there.
-                # Let's re-instantiate JsonDataset with NO transform for the base, then apply wrappers.
-                # Actually, simpler: Just modify JsonDataset to accept transform=None and do it later.
-                # But to avoid breaking existing logic, let's just create 3 datasets referencing same metadata 
-                # but with different transforms IF we want pure splits.
-                # BUT `random_split` works on indices.
-                # Strategy: Create ONE JsonDataset with train_transform.
-                # Create validation/test copies with eval_transform.
-                # Use the INDICES from random_split to create Subsets on the correct transforms.
-                pass
-            def __getitem__(self, idx):
-                # We need the original image.
-                pass
-        
-        # BETTER STRATEGY: Get indices from random_split. Create 3 Subsets manually pointing to 
-        # different underlying datasets (or same logic).
-        # Since JsonDataset loads fast (just metadata), we can instantiate it 3 times?
-        # Metadata is ~500k lines, fast enough.
-        
         # 1. Get indices
         indices = torch.randperm(total_len, generator=torch.Generator().manual_seed(42)).tolist()
         train_idx = indices[:train_len]
         val_idx = indices[train_len : train_len + val_len]
         test_idx = indices[train_len + val_len :]
         
-        # 2. Create Datasets with correct transforms
+        # 2. Create independent Dataset instances with correct transforms
+        # This ensures Validation and Test sets are NOT augmented, even though they come from the same JSON
         train_base = JsonDataset(json_path, data_root, transform=train_transform)
         val_base = JsonDataset(json_path, data_root, transform=val_transform)
         test_base = JsonDataset(json_path, data_root, transform=val_transform)
         
+        # 3. Create Subsets pointing to the appropriate base dataset
         train_dataset = torch.utils.data.Subset(train_base, train_idx)
         val_dataset = torch.utils.data.Subset(val_base, val_idx)
         test_dataset = torch.utils.data.Subset(test_base, test_idx)
+        
+        print(f"Created independent Subsets: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
         
     else:
         # CSV/Folder Mode

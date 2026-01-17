@@ -24,7 +24,7 @@ num_classes: 6
 
 supcon:
   enabled: true
-  epochs: 10 # Short pretraining for teacher
+  epochs: 100 # Exhaustive pretraining on entire dataset
   batch_size: 64 # Fits on GPU
 
 arcface:
