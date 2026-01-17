@@ -89,6 +89,12 @@ class FineTuneDistillTrainer:
             for param in self.teacher_head.parameters():
                 param.requires_grad = False
 
+        # Save Teacher Model at the start for reference
+        if self.teacher_backbone:
+            save_snapshot(self.teacher_backbone, epoch=0, folder=os.path.join(self.cfg.snapshot_dir, "teacher_backbone"))
+        if self.teacher_head:
+            save_snapshot(self.teacher_head, epoch=0, folder=os.path.join(self.cfg.snapshot_dir, "teacher_head"))
+
         params = list(self.backbone.parameters()) + list(self.head.parameters())
         self.trainable_params = params
         self.sam = SAM(
@@ -177,31 +183,54 @@ class FineTuneDistillTrainer:
         if self.head_ema:
             self.head_ema.update(self.head)
 
-    def _validate(self) -> float:
+    def _validate(self) -> Tuple[float, float, float, float]:
         if not self.val_loader:
-            return 0.0
+            return 0.0, 0.0, 0.0, 0.0
 
         self.backbone.eval()
         self.head.eval()
+        if self.teacher_backbone: self.teacher_backbone.eval()
+        if self.teacher_head: self.teacher_head.eval()
+
         val_loss = 0.0
         val_steps = 0
+        
+        student_preds = []
+        teacher_preds = []
+        all_labels = []
 
         with torch.no_grad():
             for images, labels in self.val_loader:
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
+                # Student Forward
                 features = self.backbone(images)
                 logits = self.head(features, labels)
-                # Validation metric: Just the main criterion (e.g. Focal/CrossEntropy) against labels
                 loss = self.criterion(logits, labels)
                 val_loss += loss.item()
                 val_steps += 1
+                
+                student_preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
+                
+                # Teacher Forward (if exists)
+                if self.teacher_backbone and self.teacher_head:
+                    t_feats = self.teacher_backbone(images)
+                    t_logits = self.teacher_head(t_feats, labels)
+                    teacher_preds.extend(torch.argmax(t_logits, dim=1).cpu().numpy())
+                
+                all_labels.extend(labels.cpu().numpy())
 
         avg_val_loss = val_loss / max(val_steps, 1)
+        student_acc = accuracy_score(all_labels, student_preds)
+        
+        teacher_acc = 0.0
+        if teacher_preds:
+            teacher_acc = accuracy_score(all_labels, teacher_preds)
+
         self.backbone.train()
         self.head.train()
-        return avg_val_loss
+        return avg_val_loss, student_acc, teacher_acc
 
     def train(self):
         self.backbone.train()
@@ -312,10 +341,15 @@ class FineTuneDistillTrainer:
                     folder=os.path.join(self.cfg.snapshot_dir, "ema", "head"),
                 )
 
-            val_loss = self._validate()
-            LOGGER.info(f"Epoch {epoch} Validation Loss: {val_loss:.4f}")
+            val_loss, val_acc, teacher_val_acc = self._validate()
+            LOGGER.info(f"Epoch {epoch} Val Loss: {val_loss:.4f} | Student Val Acc: {val_acc:.4f} | Teacher Val Acc: {teacher_val_acc:.4f}")
+            
             if self.wandb_run:
-                self.wandb_run.log({"distill/val_loss": val_loss}, step=epoch)
+                self.wandb_run.log({
+                    "distill/val_loss": val_loss,
+                    "distill/val_acc": val_acc,
+                    "distill/teacher_val_acc": teacher_val_acc
+                }, step=epoch)
 
             self.early_stopper(val_loss, self.backbone) # Saving backbone is enough, typically
             if self.early_stopper.early_stop:
