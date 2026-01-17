@@ -6,7 +6,7 @@ dataset:
   root_dirs:
     - "d:/Done,Toreview/Image Classification/data"
   json_path: "d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json"
-  batch_size: 8   # Reduced to 8 to prevent OOM on 6GB GPU
+  batch_size: 32  # Restored to 32
   num_workers: 4  # Reduced workers to save CPU RAM overhead
   val_split: 0.1
   test_split: 0.1
@@ -27,7 +27,7 @@ supcon:
 supcon:
   enabled: true
   epochs: 100 # Exhaustive pretraining on entire dataset
-  batch_size: 8 # Drastically reduced for 6GB GPU (OOM at 32)
+  batch_size: 32 # Retrying 32 as requested (Original plan)
 
 arcface:
   enabled: true
