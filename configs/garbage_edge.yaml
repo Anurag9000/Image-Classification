@@ -35,6 +35,7 @@ arcface:
   lr: 1.0e-4
   snapshot_dir: "./snapshots_teacher" # Save Teacher here
   early_stopping_patience: 5
+  use_amp: false
 
 # -------------------------------------------------------------------------
 # Phase 3: The STUDENT (Tiny Edge Model)

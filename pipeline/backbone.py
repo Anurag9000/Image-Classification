@@ -149,15 +149,35 @@ class HybridBackbone(nn.Module):
         )
         _reset_classifier(self.cnn_backbone)
 
-        self.vit_backbone = create_model(
-            self.cfg.vit_model,
-            pretrained=self.cfg.pretrained,
-            drop_path_rate=self.cfg.vit_drop_path_rate,
-        )
-        _reset_classifier(self.vit_backbone)
+        if self.cfg.vit_model:
+            self.vit_backbone = create_model(
+                self.cfg.vit_model,
+                pretrained=self.cfg.pretrained,
+                drop_path_rate=self.cfg.vit_drop_path_rate,
+            )
+            _reset_classifier(self.vit_backbone)
+            
+            # DEBUG: Verify weights are healthy
+            for name, param in self.vit_backbone.named_parameters():
+                 if torch.isnan(param).any():
+                      print(f"CRITICAL: Found NaN in pretrained ViT weights! Layer: {name}")
+                      import sys; sys.exit(1)
 
-        if self.cfg.token_merging_ratio:
-            self.vit_backbone = apply_token_merging(self.vit_backbone, ratio=self.cfg.token_merging_ratio)
+            if self.cfg.token_merging_ratio:
+                self.vit_backbone = apply_token_merging(self.vit_backbone, ratio=self.cfg.token_merging_ratio)
+        else:
+            self.vit_backbone = nn.Identity()
+
+        if self.cfg.lora_rank and self.cfg.vit_model:
+            inject_lora(
+                self.vit_backbone,
+                LoRAConfig(
+                    rank=self.cfg.lora_rank,
+                    alpha=self.cfg.lora_alpha,
+                    train_base=self.cfg.lora_train_base,
+                    target_modules=self.cfg.lora_target_modules,
+                ),
+            )
 
         if self.cfg.lora_rank:
             inject_lora(
@@ -182,19 +202,47 @@ class HybridBackbone(nn.Module):
         if self.cfg.freeze_vit and not self.cfg.lora_rank:
             for param in self.vit_backbone.parameters():
                 param.requires_grad = False
-
-        self.cnn_dim = getattr(self.cnn_backbone, "num_features", 1024)
-        self.vit_dim = getattr(self.vit_backbone, "num_features", 1024)
-
+        
+        # Pre-initialize attributes to avoid AttributeError during detection
         self.use_cbam = self.cfg.use_cbam
-        if self.use_cbam:
-            self.cbam = CBAM(self.cnn_dim)
+        self.cbam = None
         self.mixstyle_module = None
+        # initialize mixstyle with placeholder if needed or just skip during detection
+        
+        # Auto-detect dimensions using dummy input
+        with torch.no_grad():
+            dummy = torch.zeros(1, 3, 224, 224)
+            # CNN Dim
+            try:
+                feat = self._cnn_features(dummy)
+                self.cnn_dim = feat.shape[1]
+            except Exception as e:
+                print(f"Error checking CNN dimensions: {e}")
+                self.cnn_dim = getattr(self.cnn_backbone, "num_features", 1024)
+
+            # ViT Dim
+            try:
+                feat = self._vit_features(dummy)
+                self.vit_dim = feat.shape[1]
+            except Exception as e:
+                 print(f"Error checking ViT dimensions: {e}")
+                 self.vit_dim = getattr(self.vit_backbone, "num_features", 0) if self.cfg.vit_model else 0
+        
+        print(f"HybridBackbone Dimensions Detected -> CNN: {self.cnn_dim}, ViT: {self.vit_dim}")
+
+        # Now instantiate modules dependent on dimensions
+        if self.use_cbam:
+            # CBAM operates on intermediate features (before head), so use num_features
+            # If num_features is missing (unlikely), fallback to detected cnn_dim (might fail if they differ)
+            cbam_dim = getattr(self.cnn_backbone, "num_features", self.cnn_dim)
+            self.cbam = CBAM(cbam_dim)
+            print(f"CBAM initialized with channels: {cbam_dim}")
+            
         if self.cfg.mixstyle:
             self.mixstyle_module = MixStyle(p=self.cfg.mixstyle_p, alpha=self.cfg.mixstyle_alpha)
 
         self.token_learner = None
-        if self.cfg.token_learner_tokens:
+        if self.cfg.token_learner_tokens and self.cfg.vit_model:
             self.token_learner = TokenLearner(self.vit_dim, self.cfg.token_learner_tokens)
 
         total_dim = self.cnn_dim + self.vit_dim
@@ -207,10 +255,19 @@ class HybridBackbone(nn.Module):
 
     def _cnn_features(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.cnn_backbone.forward_features(x)
+        if torch.isnan(feat).any():
+            print(f"NaN detected in RAW CNN BACKBONE output! Input stats: mean={x.mean()}, std={x.std()}")
+            import sys; sys.exit(1)
+
         if isinstance(feat, (list, tuple)):
             feat = feat[-1]
-        if self.use_cbam and isinstance(feat, torch.Tensor) and feat.dim() == 4:
+        
+        if self.use_cbam and getattr(self, "cbam", None) is not None and isinstance(feat, torch.Tensor) and feat.dim() == 4:
             feat = self.cbam(feat)
+            if torch.isnan(feat).any():
+                print("NaN detected in CBAM output!")
+                import sys; sys.exit(1)
+
         if self.mixstyle_module and self.training and isinstance(feat, torch.Tensor) and feat.dim() == 4:
             feat = self.mixstyle_module(feat)
         if hasattr(self.cnn_backbone, "forward_head"):
@@ -223,6 +280,10 @@ class HybridBackbone(nn.Module):
         return feat
 
     def _vit_features(self, x: torch.Tensor) -> torch.Tensor:
+        if not self.cfg.vit_model:
+             # Return empty tensor with same batch size and dtype, but 0 features
+             return torch.zeros((x.size(0), 0), device=x.device, dtype=x.dtype)
+
         feat = self.vit_backbone.forward_features(x)
         if isinstance(feat, dict):
             feat = feat.get("x_norm_clstoken") or feat.get("x_norm", None) or feat.get("x", None)
@@ -245,11 +306,27 @@ class HybridBackbone(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         cnn_feat = self._cnn_features(x)
+        if torch.isnan(cnn_feat).any() or torch.isinf(cnn_feat).any():
+             print(f"NaN/Inf detected in CNN Features! min: {cnn_feat.min()}, max: {cnn_feat.max()}")
+             import sys; sys.exit(1)
+
         vit_feat = self._vit_features(x)
+        if torch.isnan(vit_feat).any() or torch.isinf(vit_feat).any():
+             print(f"NaN/Inf detected in ViT Features! min: {vit_feat.min()}, max: {vit_feat.max()}")
+             import sys; sys.exit(1)
 
         combined = torch.cat([cnn_feat, vit_feat], dim=1)
+        
         refined = self.dha(combined)
+        if torch.isnan(refined).any():
+             print("NaN detected in DHA (Attention) Output!")
+             import sys; sys.exit(1)
+             
         fused = self.fusion_fc(refined)
+        if torch.isnan(fused).any():
+             print("NaN detected in Fusion FC Output!")
+             import sys; sys.exit(1)
+             
         return fused
 
 

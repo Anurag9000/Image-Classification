@@ -83,21 +83,19 @@ class ArcFaceTrainer:
             self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
 
         params = list(self.backbone.parameters()) + list(self.head.parameters())
+        params = list(self.backbone.parameters()) + list(self.head.parameters())
         self.trainable_params = params
-        self.sam = SAM(
-            self.trainable_params,
-            torch.optim.AdamW,
-            rho=self.cfg.rho,
-            adaptive=False,
-            lr=self.cfg.lr,
-            weight_decay=1e-4,
-        )
-        apply_gradient_centralization(self.sam.base_optimizer)
-        self.optimizer = Lookahead(self.sam, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
-
+        
+        # DEBUG: Switch to plain AdamW to rule out SAM/Lookahead instability
+        # self.sam = SAM(...)
+        # apply_gradient_centralization(...)
+        # self.optimizer = Lookahead(...)
+        
+        self.optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
+        
         total_steps = self.cfg.epochs * len(self.train_loader)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.sam.base_optimizer,
+            self.optimizer,  # Use plain optimizer
             max_lr=self.cfg.lr * 10,
             total_steps=total_steps if total_steps > 0 else 1,
         )
@@ -224,44 +222,54 @@ class ArcFaceTrainer:
                 else:
                     mixed_x, y_a, y_b, lam = mixup_cutmix_tokenmix(images.clone(), labels, method=self.cfg.mix_method)
 
+                # DEBUG: Check inputs
+                if torch.isnan(mixed_x).any() or torch.isinf(mixed_x).any():
+                    LOGGER.error("NaN/Inf detected in INPUT IMAGES (mixed_x)")
+                    import sys; sys.exit(1)
+
                 # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
                 with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                     features = self.backbone(mixed_x)
+                    if torch.isnan(features).any():
+                        LOGGER.error("NaN detected in BACKBONE OUTPUT")
+                        import sys; sys.exit(1)
+                        
                     logits = self.head(features, y_a)
+                    if torch.isnan(logits).any():
+                        LOGGER.error("NaN detected in HEAD OUTPUT (Logits)")
+                        import sys; sys.exit(1)
+
                     loss = self._compute_loss(logits, y_a, y_b, lam)
+                    if torch.isnan(loss):
+                        LOGGER.error(f"NaN detected in LOSS calculation. Logits max: {logits.max()}, min: {logits.min()}")
+                        import sys; sys.exit(1)
+                    
                     if self.manifold_mixup_enabled:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
                 if self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
+                    self.scaler.step(self.optimizer) # Step optimizer directly
+                    self.scaler.update()
                 else:
                     loss.backward()
+                    self.optimizer.step()
 
-                if self.cfg.grad_clip_norm:
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
+                # Cleanup old SAM/Lookahead logic
+                # self.scaler.unscale_(self.sam.base_optimizer)
+                # self.sam.first_step(...)
+                # self.sam.second_step(...)
+                # self.optimizer.update_slow()
+                
+                self.optimizer.zero_grad() # Zero grad for next step
+                
+                # Removed second forward pass (SAM-specific)
+                loss_second = loss # Use first loss for logging
 
-                self.sam.first_step(zero_grad=True)
-
-                with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
-                    features = self.backbone(mixed_x)
-                    logits = self.head(features, y_a)
-                    loss_second = self._compute_loss(logits, y_a, y_b, lam)
-                    if self.manifold_mixup_enabled:
-                        mix_loss = self._apply_manifold_mixup(logits, y_a)
-                        loss_second = (loss_second + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
-
-                if self.cfg.use_amp:
-                    self.scaler.scale(loss_second).backward()
-                else:
-                    loss_second.backward()
-
-                self.sam.second_step(zero_grad=True, grad_scaler=self.scaler if self.cfg.use_amp else None)
-                self.optimizer.update_slow()
-
-                if self.cfg.use_amp:
-                    self.scaler.update()
+                # self.scheduler.step() moved to correct place?
+                # OneCycleLR should step after optimizer
+                self.scheduler.step()
 
                 self.scheduler.step()
                 self._update_ema()

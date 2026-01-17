@@ -46,17 +46,11 @@ class SupConPretrainer:
         self.model = HybridBackbone(self.backbone_cfg).to(self.device)
 
         self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
-        self.sam = SAM(
-            self.model.parameters(),
-            torch.optim.AdamW,
-            rho=0.05,
-            adaptive=True,
-            lr=self.cfg.lr,
-            weight_decay=1e-4,
-        )
-        apply_gradient_centralization(self.sam.base_optimizer)
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.sam.base_optimizer, T_max=self.cfg.steps)
+        # DEBUG: Standardizing optimizer to AdamW for debugging
+        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.cfg.lr, weight_decay=1e-4)
+
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.cfg.steps)
         # Fix: torch.cuda.amp.GradScaler -> torch.amp.GradScaler('cuda', ...)
         self.scaler = torch.amp.GradScaler('cuda', enabled=self.cfg.use_amp)
         self.model_ema = ModelEMA(self.model, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
@@ -86,30 +80,28 @@ class SupConPretrainer:
             # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
             with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                 feats = self.model(images)
+                if torch.isnan(feats).any():
+                     print("NaN detected in SupCon Model Output (Features)!")
+                     import sys; sys.exit(1)
+                
                 loss = self.loss_fn(feats, expanded_labels)
+                if torch.isnan(loss):
+                     print("NaN detected in SupCon Loss!")
+                     import sys; sys.exit(1)
 
             if self.cfg.use_amp:
                 self.scaler.scale(loss).backward()
-                self.scaler.unscale_(self.sam.base_optimizer)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
             else:
                 loss.backward()
-
-            self.sam.first_step(zero_grad=True)
-
-            with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
-                feats = self.model(images)
-                loss_second = self.loss_fn(feats, expanded_labels)
-
-            if self.cfg.use_amp:
-                self.scaler.scale(loss_second).backward()
-            else:
-                loss_second.backward()
-
-            self.sam.second_step(zero_grad=True, grad_scaler=self.scaler if self.cfg.use_amp else None)
-            if self.cfg.use_amp:
-                self.scaler.update()
-
+                self.optimizer.step()
+            
+            self.optimizer.zero_grad()
             self.scheduler.step()
+            
+            loss_second = loss # Legacy compatibility for logging, as SAM had a second loss
+
             if self.model_ema:
                 self.model_ema.update(self.model)
 

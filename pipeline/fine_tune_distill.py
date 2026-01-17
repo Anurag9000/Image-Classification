@@ -51,8 +51,8 @@ class DistillConfig:
     max_steps: Optional[int] = None
     wandb: dict = field(default_factory=dict)
     early_stopping_patience: int = 5
+    teacher_backbone_config: dict = field(default_factory=dict) # Should be passed from global['backbone']
     val_split: float = 0.1
-
 
 class FineTuneDistillTrainer:
     def __init__(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, config: Optional[DistillConfig] = None):
@@ -64,21 +64,30 @@ class FineTuneDistillTrainer:
         os.makedirs(self.cfg.snapshot_dir, exist_ok=True)
         os.makedirs(os.path.dirname(self.cfg.log_csv), exist_ok=True)
 
-        self.backbone_cfg = BackboneConfig(**self.cfg.backbone)
+        self.backbone_cfg = BackboneConfig(**self.cfg.backbone) # Student Config
         self.backbone = HybridBackbone(self.backbone_cfg).to(self.device)
         self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
 
         self.teacher_backbone: Optional[HybridBackbone] = None
         self.teacher_head: Optional[AdaFace] = None
+        
+        # Teacher Config Logic
+        teacher_bb_cfg_dict = self.cfg.teacher_backbone_config if self.cfg.teacher_backbone_config else self.cfg.backbone
+        self.teacher_backbone_cfg = BackboneConfig(**teacher_bb_cfg_dict)
+
         if self.cfg.teacher_backbone_path and os.path.exists(self.cfg.teacher_backbone_path):
             LOGGER.info("Loading teacher backbone from %s", self.cfg.teacher_backbone_path)
             state = torch.load(self.cfg.teacher_backbone_path, map_location=self.device)
-            self.backbone.load_state_dict(state, strict=False)
-            self.teacher_backbone = HybridBackbone(self.backbone_cfg).to(self.device)
+            if "model_state_dict" in state:
+                state = state["model_state_dict"] # Handle different save formats
+                
+            self.teacher_backbone = HybridBackbone(self.teacher_backbone_cfg).to(self.device)
             self.teacher_backbone.load_state_dict(state, strict=False)
             self.teacher_backbone.eval()
             for param in self.teacher_backbone.parameters():
                 param.requires_grad = False
+        else:
+            LOGGER.warning("No teacher backbone path found or file does not exist. Distillation might fail if weights expected.")
         if self.cfg.teacher_head_path and os.path.exists(self.cfg.teacher_head_path):
             LOGGER.info("Loading teacher head from %s", self.cfg.teacher_head_path)
             state = torch.load(self.cfg.teacher_head_path, map_location=self.device)
@@ -97,20 +106,15 @@ class FineTuneDistillTrainer:
 
         params = list(self.backbone.parameters()) + list(self.head.parameters())
         self.trainable_params = params
-        self.sam = SAM(
-            self.trainable_params,
-            torch.optim.AdamW,
-            rho=self.cfg.rho,
-            adaptive=False,
-            lr=self.cfg.lr,
-            weight_decay=1e-4,
-        )
-        apply_gradient_centralization(self.sam.base_optimizer)
-        self.optimizer = Lookahead(self.sam)
+        params = list(self.backbone.parameters()) + list(self.head.parameters())
+        self.trainable_params = params
+        
+        # DEBUG: Standardizing optimizer to AdamW for debugging/stability
+        self.optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
 
         total_steps = self.cfg.epochs * len(self.train_loader)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.sam.base_optimizer,
+            self.optimizer,
             max_lr=self.cfg.lr * 2,
             total_steps=total_steps if total_steps > 0 else 1,
         )
@@ -263,41 +267,18 @@ class FineTuneDistillTrainer:
 
                 if self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
+                    self.scaler.step(self.optimizer)
+                    self.scaler.update()
                 else:
                     loss.backward()
+                    self.optimizer.step()
+                
+                self.optimizer.zero_grad()
+                
+                loss_second = loss # Legacy compatibility
 
-                if self.cfg.grad_clip_norm:
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
-
-                self.sam.first_step(zero_grad=True)
-
-                with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
-                    student_features = self.backbone(mixed_x)
-                    student_logits = self.head(student_features, y_a)
-                    loss_second = self._distill_loss(
-                        student_logits,
-                        student_features,
-                        teacher_soft,
-                        teacher_features,
-                        y_a,
-                        y_b,
-                        lam,
-                    )
-                    if self.manifold_mixup_enabled:
-                        mix_loss = self._apply_manifold_mixup(student_logits, y_a)
-                        loss_second = (loss_second + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
-
-                if self.cfg.use_amp:
-                    self.scaler.scale(loss_second).backward()
-                else:
-                    loss_second.backward()
-
-                self.sam.second_step(zero_grad=True, grad_scaler=self.scaler if self.cfg.use_amp else None)
-                self.optimizer.update_slow()
-                if self.cfg.use_amp:
-                    self.scaler.update()
-
+                # self.scheduler.step() moved to correct place?
+                # OneCycleLR should step after optimizer
                 self.scheduler.step()
                 self._update_ema()
 
@@ -306,7 +287,7 @@ class FineTuneDistillTrainer:
                 labels_all.extend(labels.cpu().numpy())
  
                 if len(epoch_losses) % 10 == 0:
-                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.dataloader)}] - Loss: {loss_second.item():.4f}")
+                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f}")
 
             acc = accuracy_score(labels_all, preds_all)
             f1 = f1_score(labels_all, preds_all, average="macro")

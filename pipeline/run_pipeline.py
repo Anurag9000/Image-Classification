@@ -189,7 +189,8 @@ def run_arcface_phase(cfg: dict) -> None:
         LOGGER.info(f"FINAL TEST RESULTS :: Accuracy: {final_acc:.4f} | F1 Score: {final_f1:.4f}")
 
 
-def run_distill_phase(cfg: dict) -> None:
+def run_distill_phase(full_cfg: dict) -> None: # Received full config
+    cfg = full_cfg.get("distill", {})
     if not cfg.get("enabled", True):
         LOGGER.info("Distillation phase disabled, skipping.")
         return
@@ -212,7 +213,7 @@ def run_distill_phase(cfg: dict) -> None:
         ema_decay=cfg.get("ema_decay", 0.9995),
         teacher_backbone_path=cfg.get("teacher_backbone_path"),
         teacher_head_path=cfg.get("teacher_head_path"),
-        backbone=cfg.get("backbone", {}),
+        backbone=cfg.get("backbone", {}), # Student config
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations", {}),
         use_manifold_mixup=cfg.get("use_manifold_mixup", False),
@@ -225,7 +226,11 @@ def run_distill_phase(cfg: dict) -> None:
         log_csv=cfg.get("log_csv", "./logs/distill_metrics.csv"),
         early_stopping_patience=cfg.get("early_stopping_patience", 5),
         val_split=cfg.get("val_split", 0.1),
+        
+        # Inject correct teacher config from global config
+        teacher_backbone_config=full_cfg.get("backbone", {})
     )
+    # Filter args to remove unexpected validation issues if any, but DistillConfig needs update first
     FineTuneDistillTrainer(train_loader, val_loader, distill_cfg).train()
 
 
@@ -351,7 +356,7 @@ def run_pipeline(config_path: str, phases: List[str]) -> None:
     phase_map = {
         "supcon": lambda: run_supcon_phase(cfg), # Pass FULL config to access dataset/backbone
         "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
-        "distill": lambda: run_distill_phase(cfg.get("distill", {})),
+        "distill": lambda: run_distill_phase(cfg), # Pass full cfg to access global backbone for teacher
         "evaluate": lambda: run_evaluation_phase(cfg.get("evaluation", {})),
         "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
     }
