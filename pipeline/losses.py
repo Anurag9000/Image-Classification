@@ -23,7 +23,15 @@ class AdaFace(nn.Module):
         self.momentum = 0.01
 
     def forward(self, embeddings, labels=None):
-        cosine = F.linear(F.normalize(embeddings), F.normalize(self.weight))
+        # Fix: Force float32 for metric learning to prevent NaN in AMP
+        embeddings = embeddings.float()
+        if hasattr(self, "weight"):
+             self.weight.data = self.weight.data.float() # Ensure weight is float32? usually auto-handled 
+        
+        # Manually casting weight to float for calculation
+        weight = self.weight.float()
+
+        cosine = F.linear(F.normalize(embeddings), F.normalize(weight))
         if labels is None:
             return cosine * self.s
 
@@ -38,6 +46,7 @@ class AdaFace(nn.Module):
         margin_scaler = ((norm - self.batch_mean) / (self.batch_std + self.eps)).clamp(-1, 1)
         adaptive_m = self.m * (1 + margin_scaler)
 
+        # acos numeric stability
         theta = torch.acos(cosine.clamp(-1 + self.eps, 1 - self.eps))
         target_logit = torch.cos(theta + adaptive_m.view(-1, 1))
 
@@ -62,7 +71,11 @@ class CurricularFace(nn.Module):
         self.t = nn.Parameter(torch.ones(1) * 0.0)
 
     def forward(self, embeddings, labels=None):
-        cosine = F.linear(F.normalize(embeddings), F.normalize(self.weight))
+        # Fix: Force float32 for metric learning to prevent NaN in AMP
+        embeddings = embeddings.float()
+        weight = self.weight.float()
+
+        cosine = F.linear(F.normalize(embeddings), F.normalize(weight))
         if labels is None:
             return cosine * self.s
 

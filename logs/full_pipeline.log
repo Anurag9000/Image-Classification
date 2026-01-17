@@ -1,9 +1,0 @@
-2026-01-17 19:06:13,390 - INFO - ===> Starting SupCon Pretraining Phase
-2026-01-17 19:06:14,726 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
-2026-01-17 19:06:15,084 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
-2026-01-17 19:06:15,581 - INFO - Loading pretrained weights from Hugging Face hub (timm/swin_tiny_patch4_window7_224.ms_in1k)
-2026-01-17 19:06:15,836 - INFO - [timm/swin_tiny_patch4_window7_224.ms_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
-2026-01-17 19:09:28,166 - INFO - SupCon Step [10/200] - Loss: nan
-2026-01-17 19:12:29,116 - INFO - SupCon Step [20/200] - Loss: nan
-2026-01-17 19:14:57,540 - INFO - SupCon Step [30/200] - Loss: nan
-2026-01-17 19:17:18,034 - INFO - SupCon Step [40/200] - Loss: nan
