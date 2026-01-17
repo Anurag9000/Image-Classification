@@ -125,22 +125,123 @@ def create_supcon_loader(
     augmentations: Optional[dict] = None,
     root: str = "./data",
     num_workers: int = 4,
+    json_path: Optional[str] = None
 ) -> DataLoader:
-    transform = build_train_transform(augmentations or {}, image_size=image_size, augment=True)
-    # Wrap transform to return multiple views
-    class MultiViewDataset(datasets.CIFAR100):
-        def __init__(self, *args, num_views=2, **kwargs):
-            super().__init__(*args, **kwargs)
+    # Use the shared garbage transforms but customized for Multi-View
+    # Ideally SupCon needs specific TwoCropTransform.
+    # For now, let's just use the robust training transform from files_dataset and apply it twice.
+    from .files_dataset import get_garbage_transforms, JsonDataset, CombinedFilesDataset
+    import torch
+    
+    transform = get_garbage_transforms(is_training=True, img_size=image_size)
+
+    class MultiViewWrapper(torch.utils.data.Dataset):
+        def __init__(self, dataset, num_views=2):
+            self.dataset = dataset
             self.num_views = num_views
+            
+        def __len__(self):
+            return len(self.dataset)
+            
+        def __getitem__(self, idx):
+            # We need to access the underlying image before transform to apply random transform twice
+            # But JsonDataset applies transform internally. This is a design flaw in JsonDataset for SupCon.
+            # Workaround: Dataset returns transformed image. We cannot re-transform bits.
+            # Fix: Create dataset with NO transform, then apply here.
+            # But JsonDataset doesn't seemingly support 'no transform' easily without modifying it.
+            # Let's Modify JsonDataset (in memory hack) or relies on files_dataset returning image if transform is None?
+            # JsonDataset line 52: if self.transform: ... else: A.Compose...
+            
+            # Since we cannot easily access the raw image from the instantiated dataset without changing files_dataset,
+            # We will rely on the fact that we fixed files_dataset to use whatever transform we pass.
+            # But we passed `train_transform` to it.
+            # Actually, we should instantiate JsonDataset with a transform that returns the raw image (or minimal resize), 
+            # and then apply the heavy augs here.
+            pass
+            
+            # Real Fix: Just instantiate Dataset with None, get raw image?
+            # JsonDataset code: if transform is None, it applies Resize+ToTensor.
+            # So we get a tensor. Tensors are hard to Augment with Albumentations (needs numpy).
+            
+            # Simpler Approach for now:
+            # Just let the dataset assume it returns one view.
+            # We will trick it? No.
+            
+            # FASTEST FIX: Instantiate JsonDataset with a special transform that generates 2 views?
+            # No, transform interface is image->image.
+            
+            # Let's just trust files_dataset updates I made earlier? 
+            # No, I didn't change JsonDataset to support MultiView.
+            
+            # Okay, I will use files_dataset directly but construct it here specially.
+            raise NotImplementedError("SupCon logic requires raw image access. Use 'files_dataset.JsonDataset' directly.")
 
-        def __getitem__(self, index):
-            img, target = self.data[index], self.targets[index]
-            from PIL import Image
-            img = Image.fromarray(img)
-            views = [self.transform(img) for _ in range(self.num_views)]
-            return torch.stack(views), target
+    # RE-IMPLEMENTING LOADER LOGIC FOR SUPCON CORRECTLY
+    from .files_dataset import JsonDataset
+    
+    # Custom Transform Wrapper for MultiView
+    class MultiViewTransform:
+        def __init__(self, transform, num_views=2):
+            self.transform = transform
+            self.num_views = num_views
+        
+        def __call__(self, image):
+            # image is opencv numpy array
+            views = []
+            for _ in range(self.num_views):
+                res = self.transform(image=image)
+                views.append(res['image'])
+            return torch.stack(views)
 
-    dataset = MultiViewDataset(root=root, train=True, download=True, transform=transform, num_views=2)
+    # Allow passing json_path via 'root' if it looks like a json, or explicit arg
+    if root.endswith(".json"):
+        json_path = root
+        root_dir = os.path.dirname(root) # approximation
+    else:
+        root_dir = root
+
+    raw_transform = get_garbage_transforms(is_training=True, img_size=image_size)
+    mv_transform = MultiViewTransform(raw_transform, num_views=2)
+    
+    # We need a Dataset that DOES NOT apply transform itself, but lets us apply it.
+    # JsonDataset from files_dataset applies transform.
+    # We will subclass or specific usage.
+    # Let's use JsonDataset but pass our MV transform!
+    # JsonDataset calls transform(image=image). Our MV transform expects image=image.
+    # BUT our MV returns a Tensor stack.
+    # JsonDataset expects dict['image'] output from albumentations? 
+    # Line 54: image = augmented['image']
+    # So our transform must return {'image': TensorStack}.
+    
+    class AlbumentationsMultiViewAdapter:
+        def __init__(self, transform, num_views=2):
+            self.transform = transform
+            self.num_views = num_views
+        def __call__(self, image, **kwargs):
+            views = []
+            for _ in range(self.num_views):
+                res = self.transform(image=image)
+                views.append(res['image'])
+            # Stack them: (V, C, H, W)
+            return {'image': torch.stack(views)}
+
+    adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=2)
+    
+    if json_path:
+        # User explicitly passed json_path. 
+        # root_dir should be the BASE directory where the file_paths in JSON are relative to.
+        # Based on config, 'root' argument holds specific data dirs or "./data".
+        # If 'root' is a list (from config format sometimes), take 1st, but here it is typed as str.
+        # We trust the 'root' param passed in (which comes from cfg.get("data_root", "./data")).
+        # However, run_pipeline passes cfg.get("data_root", "./data").
+        # If JSON paths start with "Dataset_Final_Aug", and root is "./data", that is perfect.
+        # DO NOT use os.path.dirname(json_path) as root_dir, that was the bug causing double path.
+        dataset = JsonDataset(json_path, root_dir=root_dir, transform=adapter) 
+    else:
+        # Fallback to CIFAR if no JSON (unlikely for user)
+        # But user HAS json.
+        raise ValueError("SupCon requires json_path for Garbage dataset.")
+
     return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
 
 
