@@ -53,6 +53,9 @@ def run_supcon_phase(full_cfg: dict) -> None:
     # Use global backbone if not in supcon config
     backbone_cfg = cfg.get("backbone", full_cfg.get("backbone", {}))
 
+    # Fix: Ensure num_views is consistent between Loader and Trainer
+    num_views = cfg.get("num_views", 2)
+
     loader = create_supcon_loader(
         batch_size=cfg.get("batch_size", 16),
         image_size=cfg.get("image_size", 224),
@@ -60,11 +63,11 @@ def run_supcon_phase(full_cfg: dict) -> None:
         root=cfg.get("data_root", "./data"),
         num_workers=cfg.get("num_workers", 0),
         json_path=json_path,
-        num_views=cfg.get("num_views", 2) # Ensure this matches SupConConfig default
+        num_views=num_views 
     )
     supcon_cfg = SupConConfig(
         temperature=cfg.get("temperature", 0.07),
-        num_views=cfg.get("num_views", 4),
+        num_views=num_views,
         lr=cfg.get("lr", 1e-3),
         steps=cfg.get("steps", 200),
         ema_decay=cfg.get("ema_decay", 0.9995),

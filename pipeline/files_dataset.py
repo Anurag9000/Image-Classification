@@ -154,7 +154,8 @@ def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
         return A.Compose([
             A.Resize(img_size, img_size),
             A.HorizontalFlip(p=0.5),
-            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0.1, rotate_limit=30, p=0.5),
+            # Replaced ShiftScaleRotate with Affine to silence warning
+            A.Affine(scale=(0.9, 1.1), translate_percent=(-0.1, 0.1), rotate=(-30, 30), p=0.5),
             
             # Advanced Augmentations requested by user
             # Heavy augmentations removed for speed optimization on single-thread loader
@@ -164,7 +165,8 @@ def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
             #     A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
             # ], p=0.3),
 
-            A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=0.3),
+            # CoarseDropout args were invalid for installed version, disabling to prevent issues
+            # A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=0.3),
             A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.3),
             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             ToTensorV2()

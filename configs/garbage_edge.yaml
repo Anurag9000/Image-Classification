@@ -24,10 +24,10 @@ num_classes: 6
 
 supcon:
   enabled: true
-supcon:
-  enabled: true
   epochs: 100 # Exhaustive pretraining on entire dataset
   batch_size: 32 # Retrying 32 as requested (Original plan)
+  num_views: 2
+
 
 arcface:
   enabled: true
