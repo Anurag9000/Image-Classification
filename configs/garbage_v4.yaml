@@ -4,10 +4,11 @@ experiment_name: "OfflineAug_ResNet50_Swin"
 # Data
 dataset:
   root_dirs:
-    - "d:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 4.v4"
+    - "d:/Done,Toreview/Image Classification/data"
+  json_path: "d:/Done,Toreview/Image Classification/data/dataset_aug_metadata.json"
   batch_size: 32
-  num_workers: 4 # Safe to increase now because CPU load is minimal
-  val_split: 0.0 
+  num_workers: 4 
+  val_split: 0.1 # Split training data for validation since we used json 
 
 # Training
 epochs: 15

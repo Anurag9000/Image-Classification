@@ -7,7 +7,8 @@ from pathlib import Path
 from tqdm import tqdm
 
 # --- Configuration ---
-NUM_VARIATIONS = 5
+# --- Configuration ---
+NUM_VARIATIONS = 10
 BASE_DIR = Path(__file__).parent
 DATA_DIR = BASE_DIR / "data"
 INPUT_DIR = DATA_DIR / "Dataset_Final"
@@ -25,23 +26,23 @@ def get_garbage_transforms():
     return A.Compose([
         A.Resize(224, 224), # Ensure consistent size
         
-        # 1. GEOMETRIC (Shape variations)
+        # 1. GEOMETRIC (Shape variations) - High probability for garbage
         A.HorizontalFlip(p=0.5),
-        A.VerticalFlip(p=0.5), # Garbage creates no orientation bias usually
+        A.VerticalFlip(p=0.5), 
         A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.2, rotate_limit=180, p=0.8),
         A.OneOf([
             A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
             A.GridDistortion(num_steps=5, distort_limit=0.5, p=1.0),
             A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
             A.Perspective(scale=(0.05, 0.1), p=1.0),
-        ], p=0.6),
+        ], p=0.7), # Increased from 0.6 to 0.7 for more shape variety
 
         # 2. PIXEL-LEVEL (Dirt, Noise)
         A.OneOf([
             A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
             A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=1.0),
-            A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=1.0), # Simulate dirt/holes
-        ], p=0.4),
+            A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=1.0),
+        ], p=0.5), # Increased from 0.4
 
         # 3. BLUR & QUALITY
         A.OneOf([
@@ -55,8 +56,8 @@ def get_garbage_transforms():
             A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1.0),
             A.RandomGamma(gamma_limit=(80, 120), p=1.0),
             A.CLAHE(clip_limit=4.0, p=1.0),
-            A.ToGray(p=0.1), # Occasional grayscale
-        ], p=0.5),
+            A.ToGray(p=0.1),
+        ], p=0.6), # Increased from 0.5 to ensure lighting variety
     ])
 
 def augment_dataset():

@@ -165,14 +165,16 @@ class ArcFaceTrainer:
         mixed_logits = lam * logits + (1 - lam) * logits[idx]
         return self._compute_loss(mixed_logits, labels, labels[idx], lam)
 
-    def _validate(self) -> float:
+    def _validate(self) -> tuple[float, float]:
         if not self.val_loader:
-            return 0.0
+            return 0.0, 0.0
 
         self.backbone.eval()
         self.head.eval()
         val_loss = 0.0
         val_steps = 0
+        all_preds = []
+        all_labels = []
 
         with torch.no_grad():
             for images, labels in self.val_loader:
@@ -184,11 +186,17 @@ class ArcFaceTrainer:
                 loss = self.criterion(logits, labels)
                 val_loss += loss.item()
                 val_steps += 1
+                
+                preds = torch.argmax(logits, dim=1).cpu().numpy()
+                all_preds.extend(preds)
+                all_labels.extend(labels.cpu().numpy())
 
         avg_val_loss = val_loss / max(val_steps, 1)
+        avg_val_acc = accuracy_score(all_labels, all_preds)
+        
         self.backbone.train()
         self.head.train()
-        return avg_val_loss
+        return avg_val_loss, avg_val_acc
 
     def train(self):
         self.backbone.train()
@@ -290,10 +298,13 @@ class ArcFaceTrainer:
                 save_snapshot(self.backbone_ema.ema_model, epoch=epoch, folder=os.path.join(self.cfg.snapshot_dir, "ema", "backbone"))
                 save_snapshot(self.head_ema.ema_model, epoch=epoch, folder=os.path.join(self.cfg.snapshot_dir, "ema", "head"))
 
-            val_loss = self._validate()
-            LOGGER.info(f"Epoch {epoch} Validation Loss: {val_loss:.4f}")
+            val_loss, val_acc = self._validate()
+            LOGGER.info(f"Epoch {epoch} Validation Loss: {val_loss:.4f} | Validation Acc: {val_acc:.4f}")
             if self.wandb_run:
-                self.wandb_run.log({"arcface/val_loss": val_loss}, step=epoch)
+                self.wandb_run.log({
+                    "arcface/val_loss": val_loss,
+                    "arcface/val_acc": val_acc
+                }, step=epoch)
 
             self.early_stopper(val_loss, self.backbone)
             if self.early_stopper.early_stop:

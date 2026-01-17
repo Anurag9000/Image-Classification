@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import torch
 from typing import List
 
 import yaml
@@ -71,13 +73,19 @@ def run_arcface_phase(cfg: dict) -> None:
     
     if "dataset" in cfg and "root_dirs" in cfg["dataset"]:
         LOGGER.info(f"Using CombinedFilesDataset with roots: {cfg['dataset']['root_dirs']}")
-        train_loader, val_loader = create_garbage_loader(
+        train_loader, val_loader, test_loader = create_garbage_loader(
             root_dirs=cfg["dataset"]["root_dirs"],
             batch_size=cfg["dataset"].get("batch_size", 32),
             num_workers=cfg["dataset"].get("num_workers", 4),
-            val_split=cfg["dataset"].get("val_split", 0.0)
+            val_split=cfg["dataset"].get("val_split", 0.0),
+            test_split=cfg["dataset"].get("test_split", 0.0), # Add test split
+            json_path=cfg["dataset"].get("json_path", None)
         )
     else:
+        # Legacy/Standard Loader (updates might be needed if this path is used, but for now keep as is or unpack)
+        # Note: create_arcface_loader returns 2 items in current code. 
+        # If we are strictly using the new path, this is fine. 
+        # But for safety, valid/test might be mixed or ignored here.
         train_loader, val_loader = create_arcface_loader(
             batch_size=cfg.get("batch_size", 32),
             augment=cfg.get("augment", True),
@@ -87,6 +95,8 @@ def run_arcface_phase(cfg: dict) -> None:
             num_workers=cfg.get("num_workers", 0),
             val_split=cfg.get("val_split", 0.1),
         )
+        test_loader = None
+
     arcface_cfg = ArcFaceConfig(
         num_classes=cfg.get("num_classes", 100),
         lr=cfg.get("lr", 1e-4),
@@ -111,7 +121,57 @@ def run_arcface_phase(cfg: dict) -> None:
         val_split=cfg.get("val_split", 0.1),
         use_amp=cfg.get("use_amp", True),
     )
-    ArcFaceTrainer(train_loader, val_loader, arcface_cfg).train()
+    
+    trainer = ArcFaceTrainer(train_loader, val_loader, arcface_cfg)
+    trainer.train()
+
+    # --- Final Evaluation on Test Set ---
+    if test_loader:
+        LOGGER.info("===> Running Final Evaluation on Test Set (Best Model)")
+        # Load best model
+        best_model_path = os.path.join(arcface_cfg.snapshot_dir, "best_model.pth")
+        if os.path.exists(best_model_path):
+             checkpoint = torch.load(best_model_path, map_location=trainer.device)
+             if "model_state_dict" in checkpoint:
+                 trainer.backbone.load_state_dict(checkpoint["model_state_dict"], strict=False)
+             elif "backbone" in checkpoint:
+                 trainer.backbone.load_state_dict(checkpoint["backbone"], strict=False)
+                 
+             # Head usually needs loading too for ArcFace/Loss-based metrics, 
+             # but for pure inference usually we checking feature similarity or using head as classifier?
+             # For this pipeline, 'head' is part of training (AdaFace). 
+             # But for pure classification accuracy, we often use the backbone features or the head logits.
+             # The Trainer._validate uses trainer.head() so we should load it.
+             if "head_state_dict" in checkpoint:
+                 trainer.head.load_state_dict(checkpoint["head_state_dict"], strict=False)
+             elif "head" in checkpoint:
+                 trainer.head.load_state_dict(checkpoint["head"], strict=False)
+                 
+        # Re-use validation logic but with test_loader
+        trainer.val_loader = test_loader
+        test_loss, test_acc = trainer._validate()
+        
+        # Calculate F1 as well (Validation loop updated previously didn't do F1 in _validate return, but calculates internally in epoch loop)
+        # Let's do a quick manual run to get F1
+        trainer.backbone.eval()
+        trainer.head.eval()
+        all_preds = []
+        all_labels = []
+        with torch.no_grad():
+             for images, labels in test_loader:
+                 images = images.to(trainer.device)
+                 labels = labels.to(trainer.device)
+                 feats = trainer.backbone(images)
+                 logits = trainer.head(feats, labels)
+                 preds = torch.argmax(logits, dim=1).cpu().numpy()
+                 all_preds.extend(preds)
+                 all_labels.extend(labels.cpu().numpy())
+                 
+        from sklearn.metrics import accuracy_score, f1_score
+        final_acc = accuracy_score(all_labels, all_preds)
+        final_f1 = f1_score(all_labels, all_preds, average='macro')
+        
+        LOGGER.info(f"FINAL TEST RESULTS :: Accuracy: {final_acc:.4f} | F1 Score: {final_f1:.4f}")
 
 
 def run_distill_phase(cfg: dict) -> None:
