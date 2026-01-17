@@ -37,18 +37,30 @@ def create_eval_loader(
     return DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
 
 
-def run_supcon_phase(cfg: dict) -> None:
+def run_supcon_phase(full_cfg: dict) -> None:
+    cfg = full_cfg.get("supcon", {})
     if not cfg.get("enabled", True):
         LOGGER.info("SupCon phase disabled, skipping.")
         return
 
     LOGGER.info("===> Starting SupCon Pretraining Phase")
+    
+    # Extract json_path from global dataset config
+    json_path = None
+    if "dataset" in full_cfg and "json_path" in full_cfg["dataset"]:
+        json_path = full_cfg["dataset"]["json_path"]
+
+    # Use global backbone if not in supcon config
+    backbone_cfg = cfg.get("backbone", full_cfg.get("backbone", {}))
+
     loader = create_supcon_loader(
         batch_size=cfg.get("batch_size", 16),
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
         root=cfg.get("data_root", "./data"),
         num_workers=cfg.get("num_workers", 0),
+        json_path=json_path,
+        num_views=cfg.get("num_views", 2) # Ensure this matches SupConConfig default
     )
     supcon_cfg = SupConConfig(
         temperature=cfg.get("temperature", 0.07),
@@ -56,7 +68,7 @@ def run_supcon_phase(cfg: dict) -> None:
         lr=cfg.get("lr", 1e-3),
         steps=cfg.get("steps", 200),
         ema_decay=cfg.get("ema_decay", 0.9995),
-        backbone=cfg.get("backbone", {}),
+        backbone=backbone_cfg,
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations", {}),
         num_workers=cfg.get("num_workers", 0),
@@ -334,7 +346,7 @@ def run_pipeline(config_path: str, phases: List[str]) -> None:
     setup_logger(cfg.get("logging", {}).get("file", "./logs/full_pipeline.log"))
 
     phase_map = {
-        "supcon": lambda: run_supcon_phase(cfg.get("supcon", {})),
+        "supcon": lambda: run_supcon_phase(cfg), # Pass FULL config to access dataset/backbone
         "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
         "distill": lambda: run_distill_phase(cfg.get("distill", {})),
         "evaluate": lambda: run_evaluation_phase(cfg.get("evaluation", {})),

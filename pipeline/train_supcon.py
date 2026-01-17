@@ -125,7 +125,8 @@ def create_supcon_loader(
     augmentations: Optional[dict] = None,
     root: str = "./data",
     num_workers: int = 4,
-    json_path: Optional[str] = None
+    json_path: Optional[str] = None,
+    num_views: int = 2
 ) -> DataLoader:
     # Use the shared garbage transforms but customized for Multi-View
     # Ideally SupCon needs specific TwoCropTransform.
@@ -144,36 +145,6 @@ def create_supcon_loader(
             return len(self.dataset)
             
         def __getitem__(self, idx):
-            # We need to access the underlying image before transform to apply random transform twice
-            # But JsonDataset applies transform internally. This is a design flaw in JsonDataset for SupCon.
-            # Workaround: Dataset returns transformed image. We cannot re-transform bits.
-            # Fix: Create dataset with NO transform, then apply here.
-            # But JsonDataset doesn't seemingly support 'no transform' easily without modifying it.
-            # Let's Modify JsonDataset (in memory hack) or relies on files_dataset returning image if transform is None?
-            # JsonDataset line 52: if self.transform: ... else: A.Compose...
-            
-            # Since we cannot easily access the raw image from the instantiated dataset without changing files_dataset,
-            # We will rely on the fact that we fixed files_dataset to use whatever transform we pass.
-            # But we passed `train_transform` to it.
-            # Actually, we should instantiate JsonDataset with a transform that returns the raw image (or minimal resize), 
-            # and then apply the heavy augs here.
-            pass
-            
-            # Real Fix: Just instantiate Dataset with None, get raw image?
-            # JsonDataset code: if transform is None, it applies Resize+ToTensor.
-            # So we get a tensor. Tensors are hard to Augment with Albumentations (needs numpy).
-            
-            # Simpler Approach for now:
-            # Just let the dataset assume it returns one view.
-            # We will trick it? No.
-            
-            # FASTEST FIX: Instantiate JsonDataset with a special transform that generates 2 views?
-            # No, transform interface is image->image.
-            
-            # Let's just trust files_dataset updates I made earlier? 
-            # No, I didn't change JsonDataset to support MultiView.
-            
-            # Okay, I will use files_dataset directly but construct it here specially.
             raise NotImplementedError("SupCon logic requires raw image access. Use 'files_dataset.JsonDataset' directly.")
 
     # RE-IMPLEMENTING LOADER LOGIC FOR SUPCON CORRECTLY
@@ -201,7 +172,7 @@ def create_supcon_loader(
         root_dir = root
 
     raw_transform = get_garbage_transforms(is_training=True, img_size=image_size)
-    mv_transform = MultiViewTransform(raw_transform, num_views=2)
+    mv_transform = MultiViewTransform(raw_transform, num_views=num_views)
     
     # We need a Dataset that DOES NOT apply transform itself, but lets us apply it.
     # JsonDataset from files_dataset applies transform.
@@ -225,7 +196,7 @@ def create_supcon_loader(
             # Stack them: (V, C, H, W)
             return {'image': torch.stack(views)}
 
-    adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=2)
+    adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=num_views)
     
     if json_path:
         # User explicitly passed json_path. 
@@ -242,7 +213,9 @@ def create_supcon_loader(
         # But user HAS json.
         raise ValueError("SupCon requires json_path for Garbage dataset.")
 
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    # IMPORTANT: Drop Last to avoid irregular batches messing up reshaping? 
+    # Not strictly necessary but safe.
+    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
 
 
 if __name__ == "__main__":
