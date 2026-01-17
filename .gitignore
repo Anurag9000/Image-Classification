@@ -1,7 +1,9 @@
 # Ignore data, datasets, and large files
 data/
 dataset/
-*.zip
+# *.zip # Allow zips for LFS
+!data/*.zip # Explicitly allow zips inside data/
+
 
 
 *.tar
