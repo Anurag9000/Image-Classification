@@ -57,7 +57,8 @@ class SupConPretrainer:
         apply_gradient_centralization(self.sam.base_optimizer)
 
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.sam.base_optimizer, T_max=self.cfg.steps)
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.use_amp)
+        # Fix: torch.cuda.amp.GradScaler -> torch.amp.GradScaler('cuda', ...)
+        self.scaler = torch.amp.GradScaler('cuda', enabled=self.cfg.use_amp)
         self.model_ema = ModelEMA(self.model, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
 
         os.makedirs(os.path.dirname(self.cfg.snapshot_path), exist_ok=True)
@@ -82,7 +83,8 @@ class SupConPretrainer:
             # Create expanded labels: each source label repeated num_views times
             expanded_labels = labels.view(-1, 1).repeat(1, self.cfg.num_views).view(-1).to(self.device)
 
-            with torch.cuda.amp.autocast(enabled=self.cfg.use_amp):
+            # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
+            with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                 feats = self.model(images)
                 loss = self.loss_fn(feats, expanded_labels)
 
@@ -94,7 +96,7 @@ class SupConPretrainer:
 
             self.sam.first_step(zero_grad=True)
 
-            with torch.cuda.amp.autocast(enabled=self.cfg.use_amp):
+            with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                 feats = self.model(images)
                 loss_second = self.loss_fn(feats, expanded_labels)
 

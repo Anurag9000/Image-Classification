@@ -84,7 +84,7 @@ class SAM(torch.optim.Optimizer):
     def second_step(
         self,
         zero_grad: bool = False,
-        grad_scaler: Optional["torch.cuda.amp.GradScaler"] = None,
+        grad_scaler: Optional["torch.amp.GradScaler"] = None,
     ) -> None:
         for group in self.param_groups:
             for param in group["params"]:

@@ -105,8 +105,17 @@ class SupConLoss(nn.Module):
         self.temperature = temperature
 
     def forward(self, features, labels):
+        # Fix: Cast to float32 to prevent exp() overflow in float16 (AMP)
+        # exp(1/0.07) ~ 1.4M > 65k (float16 max)
+        features = features.float()
+
         features = F.normalize(features, dim=1)
         similarity = torch.matmul(features, features.T) / self.temperature
+        
+        # Numeric stability: sub max for exp
+        similarity_max, _ = torch.max(similarity, dim=1, keepdim=True)
+        similarity = similarity - similarity_max.detach()
+
         labels = labels.contiguous().view(-1, 1)
         mask = torch.eq(labels, labels.T).float().to(features.device)
         logits_mask = 1 - torch.eye(labels.shape[0], device=features.device)

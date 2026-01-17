@@ -124,7 +124,8 @@ class FineTuneDistillTrainer:
 
         self.kldiv = nn.KLDivLoss(reduction="batchmean")
         self.feature_mse = nn.MSELoss()
-        self.scaler = torch.cuda.amp.GradScaler(enabled=self.cfg.use_amp)
+        # Fix: torch.cuda.amp.GradScaler -> torch.amp.GradScaler('cuda', ...)
+        self.scaler = torch.amp.GradScaler('cuda', enabled=self.cfg.use_amp)
         self.backbone_ema = ModelEMA(self.backbone, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
         self.head_ema = ModelEMA(self.head, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
         self.manifold_mixup_enabled = self.cfg.use_manifold_mixup
@@ -251,7 +252,8 @@ class FineTuneDistillTrainer:
                 teacher_features, teacher_soft = self._teacher_forward(images, labels)
                 mixed_x, y_a, y_b, lam = mixup_cutmix_tokenmix(images.clone(), labels, method=self.cfg.mix_method)
 
-                with torch.cuda.amp.autocast(enabled=self.cfg.use_amp):
+                # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
+                with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                     student_features = self.backbone(mixed_x)
                     student_logits = self.head(student_features, y_a)
                     loss = self._distill_loss(student_logits, student_features, teacher_soft, teacher_features, y_a, y_b, lam)
@@ -270,7 +272,7 @@ class FineTuneDistillTrainer:
 
                 self.sam.first_step(zero_grad=True)
 
-                with torch.cuda.amp.autocast(enabled=self.cfg.use_amp):
+                with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                     student_features = self.backbone(mixed_x)
                     student_logits = self.head(student_features, y_a)
                     loss_second = self._distill_loss(
