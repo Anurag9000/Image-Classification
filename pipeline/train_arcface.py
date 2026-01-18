@@ -93,7 +93,10 @@ class ArcFaceTrainer:
         
         self.optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
         
-        total_steps = self.cfg.epochs * len(self.train_loader)
+        if self.train_loader:
+            total_steps = self.cfg.epochs * len(self.train_loader)
+        else:
+            total_steps = 1 # Dummy value for scheduler initialization when only evaluating/TTA
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer,  # Use plain optimizer
             max_lr=self.cfg.lr * 10,
@@ -252,7 +255,7 @@ class ArcFaceTrainer:
                 with torch.no_grad():
                     preds = torch.argmax(logits, dim=1)
                     acc = (preds == labels).float().mean() * 100.0
-
+                    
                 if self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(self.optimizer)
@@ -264,8 +267,14 @@ class ArcFaceTrainer:
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.optimizer.step()
 
+                # DEBUG: Print detailed stats every 10 steps to diagnose 0% acc
                 if step_count % 10 == 0:
                      LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}%")
+                     LOGGER.info(f"DEBUG: Labels: {labels[:10].tolist()}")
+                     LOGGER.info(f"DEBUG: Preds:  {preds[:10].tolist()}")
+                     LOGGER.info(f"DEBUG: Logits range: {logits.min().item():.2f} to {logits.max().item():.2f}")
+                     if acc.item() == 0.0:
+                         LOGGER.warning("CRITICAL: Accuracy is EXACTLY 0.0!")
 
                 # Cleanup old SAM/Lookahead logic
                 # self.scaler.unscale_(self.sam.base_optimizer)

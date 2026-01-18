@@ -15,6 +15,7 @@ from .evaluate import EvaluationConfig, Evaluator
 from .fine_tune_distill import DistillConfig, FineTuneDistillTrainer, create_distill_loader
 from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader as create_arcface_loader
 from .train_supcon import SupConConfig, SupConPretrainer, create_supcon_loader
+from pipeline.files_dataset import create_garbage_loader
 from utils import setup_logger
 
 LOGGER = logging.getLogger(__name__)
@@ -80,8 +81,6 @@ def run_supcon_phase(full_cfg: dict) -> None:
     )
     SupConPretrainer(loader, supcon_cfg).train()
 
-
-from pipeline.files_dataset import create_garbage_loader
 
 def run_arcface_phase(cfg: dict) -> None:
     LOGGER.info("===> Starting ArcFace Training Phase")
@@ -242,30 +241,80 @@ def run_distill_phase(full_cfg: dict) -> None: # Received full config
     FineTuneDistillTrainer(train_loader, val_loader, distill_cfg).train()
 
 
-def run_evaluation_phase(cfg: dict) -> None:
+def run_evaluation_phase(full_cfg: dict) -> None:
+    cfg = full_cfg.get("evaluate", {}) # Still get evaluate section for specific params
     LOGGER.info("===> Starting Evaluation Phase")
-    loader = create_eval_loader(
-        batch_size=cfg.get("batch_size", 32),
-        image_size=cfg.get("image_size", 224),
-        augmentations=cfg.get("augmentations"),
-        root=cfg.get("data_root", "./data"),
-        num_workers=cfg.get("num_workers", 0),
-    )
+    
+    if "dataset" in full_cfg:
+        LOGGER.info(f"Using CombinedFilesDataset/JsonDataset for Evaluation")
+        _, _, loader = create_garbage_loader(
+            root_dirs=full_cfg["dataset"]["root_dirs"],
+            batch_size=cfg.get("batch_size", 32),
+            num_workers=cfg.get("num_workers", 4),
+            val_split=full_cfg["dataset"].get("val_split", 0.1),
+            test_split=full_cfg["dataset"].get("test_split", 0.1),
+            json_path=full_cfg["dataset"].get("json_path", None)
+        )
+    else:
+        # Fallback (Original logic which was broken, but keeping structure if needed)
+        LOGGER.warning("No global dataset config found, falling back to legacy loader (likely CIFAR/broken)")
+        loader = create_eval_loader(
+            batch_size=cfg.get("batch_size", 32),
+            image_size=cfg.get("image_size", 224),
+            augmentations=cfg.get("augmentations"),
+            root=cfg.get("data_root", "./data"),
+            num_workers=cfg.get("num_workers", 0),
+        )
+
     eval_cfg = EvaluationConfig(
         result_dir=cfg.get("result_dir", "./eval_results"),
         tta_runs=cfg.get("tta_runs", 5),
         topk=tuple(cfg.get("topk", [1, 5])),
         compute_calibration=cfg.get("compute_calibration", True),
         ood_detection=cfg.get("ood_detection", False),
-        backbone=cfg.get("backbone", {}),
+        backbone=full_cfg.get("backbone", {}), # Use GLOBAL backbone config
+        compute_mahalanobis=cfg.get("compute_mahalanobis", False),
+        compute_vim=cfg.get("compute_vim", False),
     )
+    
+    # Needs num_classes
+    num_classes = full_cfg.get("num_classes", 100)
+    evaluator = Evaluator(loader, num_classes=num_classes, config=eval_cfg)
+    
+    # Load best model from arcface or distill snapshot
+    # Priority: Distill Best > ArcFace Best > ArcFace Final
+    # But usually we evaluate the "Main" model.
+    # Where does ArcFace save? snapshots/backbone_best.pth or similar.
+    # We should look in arcface snapshot dir.
+    
+    snapshot_dir = full_cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")
+    snapshot_path = os.path.join(snapshot_dir, "backbone_best.pth") # specific to ArcFaceTrainer
+    
+    # Try project name based
+    if "project_name" in full_cfg:
+         p_path = os.path.join(snapshot_dir, f"{full_cfg['project_name']}_best.pth")
+         if os.path.exists(p_path):
+             snapshot_path = p_path
+             
+    if not os.path.exists(snapshot_path):
+        LOGGER.warning(f"Feature Extractor snapshot not found at {snapshot_path}, checking final...")
+        snapshot_path = os.path.join(snapshot_dir, "backbone_final.pth")
 
-    evaluator = Evaluator(loader, num_classes=cfg.get("num_classes", 100), config=eval_cfg)
-    backbone_path = cfg.get("backbone_path", "./snapshots/snapshot_epoch_30.pth")
-    head_path = cfg.get("head_path", "./snapshots/head/snapshot_epoch_30.pth")
-    model, head = evaluator.load_model(backbone_path, head_path=head_path)
-    metrics = evaluator.evaluate(model, head)
-    LOGGER.info("Evaluation metrics: %s", metrics)
+    if not os.path.exists(snapshot_path):
+         LOGGER.error(f"FATAL: No model snapshot found to evaluate at {snapshot_path}")
+         return
+
+    LOGGER.info(f"Loading model for evaluation from {snapshot_path}")
+    
+    # Helper to load header too? 
+    # Evaluator needs head for loss/accuracy. 
+    # ArcFaceTrainer saves head separately? usually 'head_best.pth'
+    head_path = snapshot_path.replace("backbone", "head")
+    if not os.path.exists(head_path):
+        head_path = None
+        
+    model, head = evaluator.load_model(snapshot_path, head_path=head_path)
+    evaluator.evaluate(model, head)
 
 
 def evaluate_with_tta(cfg: dict, snapshot_dir: str):
@@ -325,11 +374,21 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
         LOGGER.error("Dataset configuration missing for TTA.")
         return
 
-    test_loader = create_garbage_test_loader(
+    _, _, test_loader = create_garbage_loader(
         root_dirs=cfg["dataset"]["root_dirs"],
         batch_size=cfg["dataset"].get("batch_size", 32),
-        num_workers=cfg["dataset"].get("num_workers", 4)
+        num_workers=cfg["dataset"].get("num_workers", 4),
+        val_split=0.0,
+        test_split=1.0, # We want full dataset as test for this specific loader call if we treat it as pure test
+        # OR: if we want to respect the split defined in config:
+        # val_split=cfg["dataset"].get("val_split", 0.0),
+        # test_split=cfg["dataset"].get("test_split", 0.1),
+        json_path=cfg["dataset"].get("json_path", None)
     )
+    # create_garbage_loader returns (train, val, test).
+    # If we want purely test set from root_dirs, we might need to carefully adjust splits.
+    # But usually TTA is run on the 'test' split.
+    # If standard params are used, test_loader is the 3rd return.
     
     all_preds = []
     all_labels = []

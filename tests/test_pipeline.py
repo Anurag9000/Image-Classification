@@ -38,8 +38,17 @@ class TestPipeline(unittest.TestCase):
         self.assertTrue(0 <= conf <= 1)
 
     def test_gradcam(self):
-        if hasattr(self.model, "cnn_backbone") and hasattr(self.model.cnn_backbone, "stages"):
-            target_layer = self.model.cnn_backbone.stages[-1][-1]
+        target_layer = None
+        if hasattr(self.model, "cnn_backbone"):
+            cnn = self.model.cnn_backbone
+            if hasattr(cnn, "stages"):
+                target_layer = cnn.stages[-1][-1]
+            elif hasattr(cnn, "layer4"):
+                target_layer = cnn.layer4[-1]
+            elif hasattr(cnn, "blocks"):
+                target_layer = cnn.blocks[-1]
+        
+        if target_layer:
             cam = GradCAM(self.model, target_layer)
             x = torch.randn(1, 3, 192, 192).to(self.device)
             heatmap = cam.generate(x)

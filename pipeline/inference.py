@@ -29,8 +29,11 @@ def load_model(
     head = AdaFace(config.fusion_dim, num_classes).to(device).eval()
 
     backbone_state = torch.load(backbone_path, map_location=device)
-    if isinstance(backbone_state, dict) and "state_dict" in backbone_state:
-        backbone_state = backbone_state["state_dict"]
+    if isinstance(backbone_state, dict):
+        if "model_state_dict" in backbone_state:
+            backbone_state = backbone_state["model_state_dict"]
+        elif "state_dict" in backbone_state:
+            backbone_state = backbone_state["state_dict"]
     if isinstance(backbone_state, dict) and "backbone" in backbone_state:
         model.load_state_dict(backbone_state["backbone"], strict=False)
         if head_path is None and "head" in backbone_state:
@@ -101,12 +104,22 @@ def run_inference(
             print(f"{os.path.basename(image_path)} => class {pred}, conf {conf:.4f}")
 
             if gradcam_dir:
-                if hasattr(model, "cnn_backbone") and hasattr(model.cnn_backbone, "stages"):
-                    target_layer = model.cnn_backbone.stages[-1][-1]
+                target_layer = None
+                cnn = model.cnn_backbone
+                if hasattr(cnn, "stages"): # ConvNeXt
+                    target_layer = cnn.stages[-1][-1]
+                elif hasattr(cnn, "layer4"): # ResNet
+                    target_layer = cnn.layer4[-1]
+                elif hasattr(cnn, "blocks"): # Some ViTs/other CNNs
+                    target_layer = cnn.blocks[-1]
+                
+                if target_layer:
                     cam = GradCAM(model, target_layer, mode="gradcam++")
                     heatmap = cam.generate(tensor)
                     cam.overlay_heatmap(heatmap, tensor[0], os.path.join(gradcam_dir, os.path.basename(image_path)))
                     cam.remove_hooks()
+                else:
+                    print(f"Warning: Could not identify target layer for GradCAM on {type(cnn)}")
 
 
 def parse_args() -> argparse.Namespace:

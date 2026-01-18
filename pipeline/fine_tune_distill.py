@@ -92,7 +92,7 @@ class FineTuneDistillTrainer:
             LOGGER.info("Loading teacher head from %s", self.cfg.teacher_head_path)
             state = torch.load(self.cfg.teacher_head_path, map_location=self.device)
             self.head.load_state_dict(state, strict=False)
-            self.teacher_head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+            self.teacher_head = AdaFace(embedding_size=self.teacher_backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
             self.teacher_head.load_state_dict(state, strict=False)
             self.teacher_head.eval()
             for param in self.teacher_head.parameters():

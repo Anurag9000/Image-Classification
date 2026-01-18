@@ -78,13 +78,29 @@ def build_trial_configs(trial: optuna.Trial) -> Dict:
 def objective(trial: optuna.Trial) -> float:
     trial_cfg = build_trial_configs(trial)
 
-    dataloader = create_dataloader(
+    from .files_dataset import create_garbage_loader
+    # Hardcoded root for now or need arg parsing?
+    # Assuming user wants to run this manually or we default to the known path
+    root_dirs = [r"d:\Done,Toreview\Image Classification\data\Dataset_Final"] 
+    
+    dataloader, _, _ = create_garbage_loader(
+        root_dirs=root_dirs,
         batch_size=32,
-        augment=True,
-        image_size=224,
-        augmentations=trial_cfg["augmentations"],
-        root="./data",
+        num_workers=4,
+        val_split=0.0, # Optimize on full train set or split? usually train/val split needed for objective.
+        # But here ArcFaceTrainer splits internally? No, we pass dataloader.
+        # ArcFaceTrainer expects (train_loader, val_loader).
+        # We should get both.
     )
+    
+    # We need to update ArcFaceTrainer init below to accept val_loader if we want validation metrics.
+    # The objective function tries to read from log csv which records val metrics?
+    # log csv records: epoch, avg_loss, acc, f1. These are TRAIN metrics in the current Trainer loop?
+    # Let's check train_arcface.py.
+    # It writes: avg_loss, acc, f1 (lines 308). These are computed from training loop.
+    # Validation is separate.
+    # So we can just pass train loader.
+
 
     config = ArcFaceConfig(
         num_classes=100,
@@ -107,7 +123,7 @@ def objective(trial: optuna.Trial) -> float:
     os.makedirs(os.path.dirname(log_csv), exist_ok=True)
 
     trainer = ArcFaceTrainer(
-        dataloader=dataloader,
+        train_loader=dataloader,
         config=config,
     )
     trainer.train()
