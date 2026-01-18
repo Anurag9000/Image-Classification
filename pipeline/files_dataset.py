@@ -1,8 +1,30 @@
+import os
+import cv2
+import torch
+import json
+import pandas as pd
+import numpy as np
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from torch.utils.data import Dataset
+from typing import List, Optional, Callable
+from .augmentations import get_garbage_transforms
 import logging
+
 LOGGER = logging.getLogger(__name__)
 
 class JsonDataset(Dataset):
-    # ... (init) ...
+    """
+    Dataset that reads from a JSON metadata file.
+    Expected JSON format: List of dicts with 'file_path' and 'label'.
+    """
+    def __init__(self, json_path: str, root_dir: str, transform: Optional[A.Compose] = None):
+        self.root_dir = root_dir
+        self.transform = transform
+        
+        with open(json_path, 'r') as f:
+            self.metadata = json.load(f)
+            
         # Create class mapping
         self.classes = sorted(list(set(item['label'] for item in self.metadata)))
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}

@@ -152,7 +152,7 @@ class FineTuneDistillTrainer:
              self.sam = None
              self.optimizer = base_optimizer
              
-        apply_gradient_centralization(self.trainable_params)
+        self.optimizer = apply_gradient_centralization(self.optimizer)
 
         if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
             self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)

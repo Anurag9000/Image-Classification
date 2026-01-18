@@ -66,7 +66,9 @@ class SupConPretrainer:
              self.optimizer = base_optimizer
              
         # Apply Gradient Centralization
-        apply_gradient_centralization(self.model.parameters())
+        # Apply Gradient Centralization
+        # Note: apply_gradient_centralization wraps the OPTIMIZER step, so we pass the optimizer.
+        self.optimizer = apply_gradient_centralization(self.optimizer)
 
         if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
             self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)

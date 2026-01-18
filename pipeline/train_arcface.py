@@ -104,7 +104,7 @@ class ArcFaceTrainer:
              
         # Apply Gradient Centralization (if not using SAM, or even with SAM base?)
         # Usually applied to base optimizer params.
-        apply_gradient_centralization(self.trainable_params)
+        self.optimizer = apply_gradient_centralization(self.optimizer)
 
         # Lookahead
         if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
