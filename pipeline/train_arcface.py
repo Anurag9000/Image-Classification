@@ -248,6 +248,11 @@ class ArcFaceTrainer:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
+                # Calculate simple accuracy for monitoring
+                with torch.no_grad():
+                    preds = torch.argmax(logits, dim=1)
+                    acc = (preds == labels).float().mean() * 100.0
+
                 if self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(self.optimizer)
@@ -258,6 +263,9 @@ class ArcFaceTrainer:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.optimizer.step()
+
+                if step_count % 10 == 0:
+                     LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}%")
 
                 # Cleanup old SAM/Lookahead logic
                 # self.scaler.unscale_(self.sam.base_optimizer)

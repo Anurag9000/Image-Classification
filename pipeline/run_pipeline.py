@@ -112,29 +112,37 @@ def run_arcface_phase(cfg: dict) -> None:
         )
         test_loader = None
 
+    # Merge global cfg (for num_classes/backbone) with arcface specific cfg
+    # Priority: arcface_cfg > global_cfg > defaults
+    arcface_specific = cfg.get("arcface", {})
+    
+    # Helper to get from either, preferring specific
+    def get_cfg(key, default):
+        return arcface_specific.get(key, cfg.get(key, default))
+
     arcface_cfg = ArcFaceConfig(
-        num_classes=cfg.get("num_classes", 100),
-        lr=cfg.get("lr", 1e-4),
-        gamma=cfg.get("gamma", 2.0),
-        smoothing=cfg.get("smoothing", 0.1),
-        epochs=cfg.get("epochs", 30),
-        mix_method=cfg.get("mix_method", "mixup"),
-        use_curricularface=cfg.get("use_curricularface", True),
-        use_evidential=cfg.get("use_evidential", False),
-        ema_decay=cfg.get("ema_decay", 0.9995),
-        compile_model=cfg.get("compile", False),
-        backbone=cfg.get("backbone", {}),
-        image_size=cfg.get("image_size", 224),
-        augmentations=cfg.get("augmentations", {}),
-        use_manifold_mixup=cfg.get("use_manifold_mixup", False),
-        manifold_mixup_alpha=cfg.get("manifold_mixup_alpha", 2.0),
-        manifold_mixup_weight=cfg.get("manifold_mixup_weight", 0.5),
-        max_steps=cfg.get("max_steps"),
-        snapshot_dir=cfg.get("snapshot_dir", "./snapshots"),
-        log_csv=cfg.get("log_csv", "./logs/arcface_metrics.csv"),
-        early_stopping_patience=cfg.get("early_stopping_patience", 5),
-        val_split=cfg.get("val_split", 0.1),
-        use_amp=cfg.get("use_amp", True),
+        num_classes=get_cfg("num_classes", 100),
+        lr=get_cfg("lr", 1e-5), # Default to safer 1e-5 if missing
+        gamma=get_cfg("gamma", 2.0),
+        smoothing=get_cfg("smoothing", 0.1),
+        epochs=get_cfg("epochs", 30),
+        mix_method=get_cfg("mix_method", "mixup"),
+        use_curricularface=get_cfg("use_curricularface", True),
+        use_evidential=get_cfg("use_evidential", False),
+        ema_decay=get_cfg("ema_decay", 0.9995),
+        compile_model=get_cfg("compile", False),
+        backbone=get_cfg("backbone", {}),
+        image_size=get_cfg("image_size", 224),
+        augmentations=get_cfg("augmentations", {}),
+        use_manifold_mixup=get_cfg("use_manifold_mixup", False),
+        manifold_mixup_alpha=get_cfg("manifold_mixup_alpha", 2.0),
+        manifold_mixup_weight=get_cfg("manifold_mixup_weight", 0.5),
+        max_steps=get_cfg("max_steps", None),
+        snapshot_dir=get_cfg("snapshot_dir", "./snapshots"),
+        log_csv=get_cfg("log_csv", "./logs/arcface_metrics.csv"),
+        early_stopping_patience=get_cfg("early_stopping_patience", 5),
+        val_split=get_cfg("val_split", 0.1),
+        use_amp=get_cfg("use_amp", True),
     )
     
     trainer = ArcFaceTrainer(train_loader, val_loader, arcface_cfg)
