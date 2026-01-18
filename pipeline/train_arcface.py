@@ -250,10 +250,13 @@ class ArcFaceTrainer:
 
                 if self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.scaler.step(self.optimizer) # Step optimizer directly
                     self.scaler.update()
                 else:
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.optimizer.step()
 
                 # Cleanup old SAM/Lookahead logic

@@ -254,8 +254,36 @@ def create_garbage_loader(
             val_dataset = None 
             test_dataset = None
 
+    # Create WeightedRandomSampler for balanced training
+    # 1. Gather all labels from the training dataset
+    if json_path:
+        # Access underlying dataset and indices
+        train_labels = [train_base.metadata[i]['label'] for i in train_idx]
+        # Map string labels to indices
+        train_labels_idx = [train_base.class_to_idx[l] for l in train_labels]
+    else:
+        # CombinedFilesDataset (list of tuples (path, label))
+        train_labels_idx = [item[1] for item in train_dataset.samples]
+
+    # 2. Compute Class Weights
+    class_counts = np.bincount(train_labels_idx)
+    # Avoid div by zero if a class is missing (unlikely but safe)
+    class_weights = 1.0 / np.maximum(class_counts, 1.0)
+    
+    # 3. Assign weight to each sample
+    sample_weights = [class_weights[l] for l in train_labels_idx]
+    
+    sampler = torch.utils.data.WeightedRandomSampler(
+        weights=sample_weights, 
+        num_samples=len(sample_weights), 
+        replacement=True
+    )
+    
+    print(f"WeightedRandomSampler enabled. Class counts: {class_counts}")
+
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True, 
+        train_dataset, batch_size=batch_size, 
+        sampler=sampler, # Replaces shuffle=True
         num_workers=num_workers, pin_memory=True
     )
     

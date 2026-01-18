@@ -22,3 +22,10 @@ __pycache__/
 # VS Code and IDE files (optional)
 .vscode/
 .idea/
+
+# Model Checkpoints and Logs
+snapshots/
+*.pth
+logs/
+*.log
+*.txt

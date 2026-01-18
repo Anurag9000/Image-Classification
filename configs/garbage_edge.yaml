@@ -6,8 +6,8 @@ dataset:
   root_dirs:
     - "d:/Done,Toreview/Image Classification/data"
   json_path: "d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json"
-  batch_size: 32  # Restored to 32
-  num_workers: 4  # Reduced workers to save CPU RAM overhead
+  batch_size: 256  # Increased to 256
+  num_workers: 4
   val_split: 0.1
   test_split: 0.1
 
@@ -17,25 +17,26 @@ dataset:
 # -------------------------------------------------------------------------
 backbone: 
   cnn_model: "resnet50"
-  vit_model: "swin_tiny_patch4_window7_224"
+  vit_model: null # Disabled Swin for significant speedup (Pure ResNet+CBAM is sufficient)
   pretrained: true
 embedding_size: 512
 num_classes: 6
 
 supcon:
   enabled: true
-  epochs: 100 # Exhaustive pretraining on entire dataset
-  batch_size: 32 # Retrying 32 as requested (Original plan)
+  epochs: 100 
+  batch_size: 256 # Increased to 256 as requested by user
   num_views: 2
+  lr: 1.0e-5 # Set to 1e-5 as requested
 
 
 arcface:
   enabled: true
   epochs: 20
-  lr: 1.0e-4
-  snapshot_dir: "./snapshots_teacher" # Save Teacher here
+  lr: 1.0e-5 # Reduced from 1e-4 to stop oscillation (Peak ~1e-4)
+  snapshot_dir: "./snapshots_teacher"
   early_stopping_patience: 5
-  use_amp: false
+  use_amp: true # Re-enabled AMP for speed (NaNs fixed via backbone/optimizer)
 
 # -------------------------------------------------------------------------
 # Phase 3: The STUDENT (Tiny Edge Model)
