@@ -8,6 +8,8 @@ import torch
 import torchvision.transforms.autoaugment as autoaugment
 from torchvision import transforms
 from torchvision.transforms import TrivialAugmentWide
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 
 # ------------------------------
@@ -209,6 +211,92 @@ def build_eval_transform(config: Optional[Dict] = None, image_size: int = 224):
             transforms.Normalize(mean=mean, std=std),
         ]
     )
+
+
+
+# ------------------------------
+# Garbage Classification Specific Transforms
+# ------------------------------
+def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
+    """
+    Returns Albumentations transforms.
+    Includes robust augmentations for training: Warp, Morph, etc.
+    """
+    if is_training:
+        return A.Compose([
+            A.Resize(img_size, img_size),
+            A.HorizontalFlip(p=0.5),
+            # Replaced ShiftScaleRotate with Affine to silence warning
+            A.Affine(scale=(0.9, 1.1), translate_percent=(-0.1, 0.1), rotate=(-30, 30), p=0.5),
+            
+            # Advanced Augmentations (Optional/Configurable in future)
+            A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.3),
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ToTensorV2()
+        ])
+    else:
+        return A.Compose([
+            A.Resize(img_size, img_size),
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ToTensorV2()
+        ])
+
+
+def get_heavy_transforms(img_size: int = 224):
+    """
+    Returns the heavy augmentation pipeline (V4).
+    Simulates severe degradation: heavy morphing, noise, blur, damaging.
+    """
+    return A.Compose([
+        A.Resize(img_size, img_size),
+        
+        # 1. GEOMETRIC TRANSFORMS
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5), 
+        A.ShiftScaleRotate(shift_limit=0.3, scale_limit=0.3, rotate_limit=180, p=0.8),
+        
+        # 2. HEAVY MORPHOLOGICAL
+        A.OneOf([
+            A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
+            A.GridDistortion(num_steps=5, distort_limit=1.0, p=1.0),
+            A.OpticalDistortion(distort_limit=1.0, shift_limit=1.0, p=1.0),
+            A.Perspective(scale=(0.1, 0.2), p=1.0),
+            A.PiecewiseAffine(scale=(0.03, 0.05), nb_rows=4, nb_cols=4, p=1.0),
+        ], p=0.9),
+
+        # 3. PIXEL-LEVEL CORRUPTIONS
+        A.OneOf([
+            A.GaussNoise(var_limit=(10.0, 50.0), p=1.0),
+            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=1.0),
+            A.MultiplicativeNoise(multiplier=[0.5, 1.5], elementwise=True, p=1.0),
+            # CoarseDropout disabled if incompatible versions found, but re-enabling for heavy
+            A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=1.0),
+        ], p=0.7),
+
+        # 4. BLUR & QUALITY
+        A.OneOf([
+            A.MotionBlur(blur_limit=7, p=1.0),
+            A.MedianBlur(blur_limit=7, p=1.0),
+            A.GaussianBlur(blur_limit=7, p=1.0),
+            A.ImageCompression(quality_lower=50, quality_upper=100, p=1.0),
+            A.Downscale(scale_min=0.5, scale_max=0.9, p=1.0),
+        ], p=0.5),
+
+        # 5. LIGHTING & COLOR
+        A.OneOf([
+            A.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.1, p=1.0),
+            A.RandomBrightnessContrast(brightness_limit=0.3, contrast_limit=0.3, p=1.0),
+            A.RandomGamma(gamma_limit=(80, 120), p=1.0),
+            A.CLAHE(clip_limit=4.0, tile_grid_size=(8, 8), p=1.0),
+            A.ChannelShuffle(p=1.0),
+            A.Solarize(threshold=128, p=1.0),
+            A.ToGray(p=1.0),
+        ], p=0.8),
+        
+        # Final Norm
+        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+        ToTensorV2()
+    ])
 
 
 if __name__ == "__main__":

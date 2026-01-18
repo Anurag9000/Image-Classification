@@ -59,7 +59,8 @@ def test_hybrid_backbone():
         cnn_model="resnet18",
         vit_model="vit_tiny_patch16_224",
         pretrained=False,
-        lora_rank=4,
+        cnn_lora_rank=4,
+        vit_lora_rank=4,
         fusion_dim=128
     )
     model_lora = HybridBackbone(cfg_lora)

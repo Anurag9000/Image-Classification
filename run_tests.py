@@ -43,14 +43,8 @@ if __name__ == "__main__":
     from tests.test_utils import test_checkpoint_save_load, test_swa, test_save_snapshot
     run_test_module("Utils", [test_checkpoint_save_load, test_swa, test_save_snapshot])
 
-    # Pipeline Components
+    # Pipeline Components (TestCase based)
     from tests.test_pipeline import TestPipeline
-    # unittest.TestCase classes need a loader, simpler to just rely on unittest.main() or wrap it
-    # But run_test_module expects functions. TestPipeline is a class.
-    # We should probably skip adding it to run_test_module and just run it separately or fix run_tests.py to handle classes.
-    # However, existing run_tests.py seems to work on functions.
-    # Let's import the test methods from an instance? No.
-    # Standard way: use unittest.TextTestRunner.
     
     print("--- Running Pipeline Integration Tests ---")
     suite = unittest.TestLoader().loadTestsFromTestCase(TestPipeline)

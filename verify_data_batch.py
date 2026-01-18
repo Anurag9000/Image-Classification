@@ -5,16 +5,22 @@ from pipeline.files_dataset import create_garbage_loader
 import logging
 import sys
 
-def verify_data():
-    print("=== Verifying Data Integrity ===")
+import argparse
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+LOGGER = logging.getLogger(__name__)
+
+def verify_data(config_path="configs/garbage_edge.yaml"):
+    LOGGER.info("=== Verifying Data Integrity ===")
     
     # Load config
-    with open("configs/garbage_edge.yaml", "r") as f:
+    LOGGER.info(f"Loading config from {config_path}")
+    with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
         
     dataset_cfg = cfg["dataset"]
-    print(f"Loading from: {dataset_cfg['root_dirs']}")
-    print(f"JSON Path: {dataset_cfg['json_path']}")
+    LOGGER.info(f"Loading from: {dataset_cfg['root_dirs']}")
+    LOGGER.info(f"JSON Path: {dataset_cfg['json_path']}")
     
     # Create Ioader
     try:
@@ -27,33 +33,36 @@ def verify_data():
             json_path=dataset_cfg["json_path"]
         )
     except Exception as e:
-        print(f"Loader Creation Failed: {e}")
+        LOGGER.error(f"Loader Creation Failed: {e}")
         return
 
-    print(f"Loader Length (Batches): {len(train_loader)}")
+    LOGGER.info(f"Loader Length (Batches): {len(train_loader)}")
     
     # Fetch one batch
     try:
         images, labels = next(iter(train_loader))
     except Exception as e:
-        print(f"Batch Fetch Failed: {e}")
+        LOGGER.error(f"Batch Fetch Failed: {e}")
         return
         
-    print(f"Batch Shape: Images={images.shape}, Labels={labels.shape}")
-    print(f"Image Range: Min={images.min():.4f}, Max={images.max():.4f}")
-    print(f"Image Mean: {images.mean():.4f}, Std: {images.std():.4f}")
+    LOGGER.info(f"Batch Shape: Images={images.shape}, Labels={labels.shape}")
+    LOGGER.info(f"Image Range: Min={images.min():.4f}, Max={images.max():.4f}")
+    LOGGER.info(f"Image Mean: {images.mean():.4f}, Std: {images.std():.4f}")
     
-    print(f"Unique Labels in Batch: {torch.unique(labels).tolist()}")
+    LOGGER.info(f"Unique Labels in Batch: {torch.unique(labels).tolist()}")
     
     if torch.isnan(images).any():
-        print("CRITICAL: NaNs found in input images!")
+        LOGGER.critical("NaNs found in input images!")
     else:
-        print("SUCCESS: Input images are clean (No NaNs).")
+        LOGGER.info("Input images are clean (No NaNs).")
         
     if labels.max() >= cfg["num_classes"]:
-        print(f"CRITICAL: Label {labels.max()} exceeds num_classes {cfg['num_classes']}")
+        LOGGER.critical(f"Label {labels.max()} exceeds num_classes {cfg['num_classes']}")
     else:
-        print(f"SUCCESS: Labels are within range [0, {cfg['num_classes']-1}]")
+        LOGGER.info(f"Labels are within range [0, {cfg['num_classes']-1}]")
 
 if __name__ == "__main__":
-    verify_data()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="configs/garbage_edge.yaml")
+    args = parser.parse_args()
+    verify_data(args.config)

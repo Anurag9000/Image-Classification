@@ -13,7 +13,11 @@ from pipeline.losses import AdaFace
 class TestPipeline(unittest.TestCase):
     def setUp(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.backbone_cfg = BackboneConfig(fusion_dim=128)
+        self.backbone_cfg = BackboneConfig(
+            cnn_model="resnet18",
+            vit_model=None,
+            fusion_dim=128
+        )
         self.model = HybridBackbone(self.backbone_cfg).to(self.device).eval()
         self.head = AdaFace(embedding_size=128, num_classes=10).to(self.device).eval()
         
@@ -71,7 +75,7 @@ class TestPipeline(unittest.TestCase):
         torch.save(self.model.state_dict(), weights_path)
         
         output_onnx = "test_backbone.onnx"
-        export_backbone_onnx(weights_path, output_onnx, backbone_cfg={"fusion_dim": 128}, image_size=192)
+        export_backbone_onnx(weights_path, output_onnx, backbone_cfg={"fusion_dim": 128, "cnn_model": "resnet18", "vit_model": None}, image_size=192)
         self.assertTrue(os.path.exists(output_onnx))
         
         # Cleanup
@@ -84,7 +88,7 @@ class TestPipeline(unittest.TestCase):
         torch.save(self.model.state_dict(), weights_path)
         
         output_q = "test_backbone_quantized.pth"
-        quantize_backbone_dynamic(weights_path, output_q, backbone_cfg={"fusion_dim": 128})
+        quantize_backbone_dynamic(weights_path, output_q, backbone_cfg={"fusion_dim": 128, "cnn_model": "resnet18", "vit_model": None})
         self.assertTrue(os.path.exists(output_q))
         
         # Cleanup

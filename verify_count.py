@@ -4,6 +4,11 @@ from pathlib import Path
 
 import argparse
 
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+LOGGER = logging.getLogger(__name__)
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Verify dataset counts.")
     parser.add_argument("--data", default="./data/Dataset_Final", help="Dataset directory")
@@ -18,12 +23,12 @@ def verify(data_dir, json_file):
     if json_path.exists():
         with open(json_path, 'r') as f:
             data = json.load(f)
-            print(f"Metadata JSON Count: {len(data)}")
+            LOGGER.info(f"Metadata JSON Count: {len(data)}")
     else:
-        print(f"Metadata file not found: {json_path}")
+        LOGGER.warning(f"Metadata file not found: {json_path}")
 
     # 2. Recursive Scan
-    print(f"Scanning {data_path} recursively...")
+    LOGGER.info(f"Scanning {data_path} recursively...")
     image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp'}
     count = 0
     if data_path.exists():
@@ -31,9 +36,9 @@ def verify(data_dir, json_file):
             for f in files:
                 if Path(f).suffix.lower() in image_extensions:
                     count += 1
-        print(f"Recursive Scan Count: {count}")
+        LOGGER.info(f"Recursive Scan Count: {count}")
     else:
-        print(f"Dataset directory not found: {data_path}")
+        LOGGER.error(f"Dataset directory not found: {data_path}")
 
 if __name__ == "__main__":
     args = parse_args()

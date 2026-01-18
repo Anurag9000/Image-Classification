@@ -33,6 +33,11 @@ class SupConConfig:
     augmentations: dict = field(default_factory=dict)
     num_workers: int = 4
     max_steps: Optional[int] = None
+    use_sam: bool = False
+    use_lookahead: bool = False
+    rho: float = 0.05
+    lookahead_k: int = 5
+    lookahead_alpha: float = 0.5
 
 
 class SupConPretrainer:
@@ -47,10 +52,30 @@ class SupConPretrainer:
 
         self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
 
-        # DEBUG: Standardizing optimizer to AdamW for debugging
-        self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.cfg.lr, weight_decay=1e-4)
+        self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
 
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=self.cfg.steps)
+        # Optimizer Selection
+        base_optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.cfg.lr, weight_decay=1e-4)
+
+        if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam:
+             self.sam = SAM(self.model.parameters(), base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             self.optimizer = self.sam
+             LOGGER.info("Using SAM Optimizer for SupCon")
+        else:
+             self.sam = None
+             self.optimizer = base_optimizer
+             
+        # Apply Gradient Centralization
+        apply_gradient_centralization(self.model.parameters())
+
+        if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
+            self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
+            LOGGER.info(f"Using Lookahead Optimizer (k={self.cfg.lookahead_k}, alpha={self.cfg.lookahead_alpha})")
+
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            self.optimizer if not self.sam else self.sam.base_optimizer,
+            T_max=self.cfg.steps
+        )
         # Fix: torch.cuda.amp.GradScaler -> torch.amp.GradScaler('cuda', ...)
         self.scaler = torch.amp.GradScaler('cuda', enabled=self.cfg.use_amp)
         self.model_ema = ModelEMA(self.model, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
@@ -89,7 +114,28 @@ class SupConPretrainer:
                      print("NaN detected in SupCon Loss!")
                      raise RuntimeError("NaN detected in SupCon Model Output (Features)!")
 
-            if self.cfg.use_amp:
+            if self.sam:
+                 self.scaler.unscale_(self.sam.base_optimizer)
+                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
+                 
+                 def closure_first():
+                     self.sam.first_step(zero_grad=True)
+                     return loss
+                 
+                 closure_first()
+                 
+                 with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
+                     feats_2 = self.model(images)
+                     loss_2 = self.loss_fn(feats_2, expanded_labels)
+                     
+                 self.scaler.scale(loss_2).backward()
+                 self.scaler.unscale_(self.sam.base_optimizer)
+                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
+                 
+                 self.sam.second_step(zero_grad=True)
+                 self.scaler.update()
+
+            elif self.cfg.use_amp:
                 self.scaler.scale(loss).backward()
                 self.scaler.unscale_(self.optimizer)
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
@@ -117,8 +163,9 @@ class SupConPretrainer:
 
 
 
-# RE-IMPLEMENTING LOADER LOGIC FOR SUPCON CORRECTLY
-from .files_dataset import JsonDataset, get_garbage_transforms
+# Multi-View Dataset Logic
+from .files_dataset import JsonDataset
+from .augmentations import get_garbage_transforms
 
 # Custom Transform Wrapper for MultiView
 class MultiViewTransform:

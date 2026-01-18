@@ -60,6 +60,8 @@ class ArcFaceConfig:
     wandb: dict = field(default_factory=dict)
     early_stopping_patience: int = 5
     val_split: float = 0.1
+    use_sam: bool = False
+    use_lookahead: bool = False
 
 
 class ArcFaceTrainer:
@@ -79,25 +81,43 @@ class ArcFaceTrainer:
 
         if self.cfg.use_curricularface:
             self.head = CurricularFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+            LOGGER.info("Initialized CurricularFace Loss (Adaptive Curriculum).")
         else:
             self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+            LOGGER.info("Initialized AdaFace Loss (Adaptive Margin for low-quality images).")
 
-        params = list(self.backbone.parameters()) + list(self.head.parameters())
+        params = [p for p in list(self.backbone.parameters()) + list(self.head.parameters()) if p.requires_grad]
         self.trainable_params = params
         
-        # DEBUG: Switch to plain AdamW to rule out SAM/Lookahead instability
-        # self.sam = SAM(...)
-        # apply_gradient_centralization(...)
-        # self.optimizer = Lookahead(...)
+        # Optimizer Selection
+        base_optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
         
-        self.optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
-        
+        if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam: # Assuming use_sam flag, or add it to config
+             # SAM requires a closure, handled in train loop.
+             # But assuming we wrap the base optimizer.
+             self.sam = SAM(self.trainable_params, base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             self.optimizer = self.sam # Placeholder alias
+             LOGGER.info("Using SAM Optimizer")
+        else:
+             self.sam = None
+             self.optimizer = base_optimizer
+             
+        # Apply Gradient Centralization (if not using SAM, or even with SAM base?)
+        # Usually applied to base optimizer params.
+        apply_gradient_centralization(self.trainable_params)
+
+        # Lookahead
+        if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
+            self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
+            LOGGER.info(f"Using Lookahead Optimizer (k={self.cfg.lookahead_k}, alpha={self.cfg.lookahead_alpha})")
+
         if self.train_loader:
             total_steps = self.cfg.epochs * len(self.train_loader)
         else:
-            total_steps = 1 # Dummy value for scheduler initialization when only evaluating/TTA
+            total_steps = 1
+            
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.optimizer,  # Use plain optimizer
+            self.optimizer if not self.sam else self.sam.base_optimizer, 
             max_lr=self.cfg.lr * 10,
             total_steps=total_steps if total_steps > 0 else 1,
         )
@@ -118,6 +138,10 @@ class ArcFaceTrainer:
 
         with open(self.cfg.log_csv, "w", newline="") as f:
             csv.writer(f).writerow(["epoch", "train_loss", "val_loss", "val_acc", "val_f1"])
+            
+        self.step_log_csv = os.path.join(os.path.dirname(self.cfg.log_csv), "train_steps.csv")
+        with open(self.step_log_csv, "w", newline="") as f:
+            csv.writer(f).writerow(["epoch", "step", "loss", "acc", "lr"])
 
     def _update_ema(self):
         if self.backbone_ema:
@@ -153,12 +177,16 @@ class ArcFaceTrainer:
                 labels = labels.to(self.device, non_blocking=True)
 
                 features = self.backbone(images)
-                logits = self.head(features, labels) # ArcFace requires labels even in eval
-                loss = self.criterion(logits, labels)
+                
+                # 1. Loss needs Margins (Adaptive)
+                logits_loss = self.head(features, labels) 
+                loss = self.criterion(logits_loss, labels)
                 val_loss += loss.item()
                 val_steps += 1
                 
-                preds = torch.argmax(logits, dim=1).cpu().numpy()
+                # 2. Metrics need Raw Cosine (No Margins)
+                logits_raw = self.head(features, labels=None)
+                preds = torch.argmax(logits_raw, dim=1).cpu().numpy()
                 all_preds.extend(preds)
                 all_labels.extend(labels.cpu().numpy())
 
@@ -227,11 +255,43 @@ class ArcFaceTrainer:
                     preds = torch.argmax(logits, dim=1)
                     acc = (preds == labels).float().mean() * 100.0
                     
-                if self.cfg.use_amp:
+                # Optimization Step
+                if self.sam:
+                    # SAM requires two forward-backward passes
+                    # 1. First Step (done above with loss.backward)
+                    self.scaler.unscale_(self.sam.base_optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
+                    
+                    # SAM First Step: ascends to local maximum
+                    def closure_first():
+                        self.sam.first_step(zero_grad=True)
+                        return loss # Not strictly used by first_step but cleaner signature if needed
+                    
+                    closure_first()
+                    
+                    # 2. Second Forward-Backward (Calculate gradient at max)
+                    with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
+                         # Re-compute features/loss at new point
+                         features_2 = self.backbone(mixed_x)
+                         logits_2 = self.head(features_2, y_a)
+                         loss_2 = self._compute_loss(logits_2, y_a, y_b, lam)
+                         if self.manifold_mixup_enabled:
+                             mix_loss_2 = self._apply_manifold_mixup(logits_2, y_a)
+                             loss_2 = (loss_2 + mix_loss_2 * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
+
+                    self.scaler.scale(loss_2).backward()
+                    self.scaler.unscale_(self.sam.base_optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
+                    
+                    # SAM Second Step: descends gradient
+                    self.sam.second_step(zero_grad=True)
+                    self.scaler.update()
+
+                elif self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
                     self.scaler.unscale_(self.optimizer)
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
-                    self.scaler.step(self.optimizer) # Step optimizer directly
+                    self.scaler.step(self.optimizer) 
                     self.scaler.update()
                 else:
                     loss.backward()
@@ -240,30 +300,37 @@ class ArcFaceTrainer:
 
                 epoch_losses.append(loss.item())
 
-                # DEBUG: Print detailed stats every 10 steps to diagnose 0% acc
-                if step_count % 10 == 0:
+                # DEBUG: Print detailed stats
+                if step_count % 50 == 0:
                      LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}%")
-                     LOGGER.info(f"DEBUG: Labels: {labels[:10].tolist()}")
-                     LOGGER.info(f"DEBUG: Preds:  {preds[:10].tolist()}")
-                     LOGGER.info(f"DEBUG: Logits range: {logits.min().item():.2f} to {logits.max().item():.2f}")
                      if acc.item() == 0.0:
                          LOGGER.warning("CRITICAL: Accuracy is EXACTLY 0.0!")
 
-                # Cleanup old SAM/Lookahead logic
-                # self.scaler.unscale_(self.sam.base_optimizer)
-                # self.sam.first_step(...)
-                # self.sam.second_step(...)
-                # self.optimizer.update_slow()
+                # Zero grad for next step
+                self.optimizer.zero_grad() 
                 
-                self.optimizer.zero_grad() # Zero grad for next step
-                
-                # Removed second forward pass (SAM-specific)
-                loss_second = loss # Use first loss for logging
+                loss_second = loss 
 
-                # self.scheduler.step() moved to correct place?
-                # OneCycleLR should step after optimizer
                 self.scheduler.step()
                 self._update_ema()
+
+                # -------------------------------------------------------------------------
+                # "Best Model Ever" Requirement: Step-wise Logging & Persistence
+                # -------------------------------------------------------------------------
+                # 1. Log every step to separate CSV
+                with open(self.step_log_csv, 'a', newline='') as f:
+                    csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
+
+                # 2. Save "Latest" model every step (Overwrite)
+                # Note: Saving full state dict every step is I/O intensive but requested.
+                torch.save({
+                    'epoch': epoch,
+                    'step': step_count,
+                    'backbone_state_dict': self.backbone.state_dict(),
+                    'head_state_dict': self.head.state_dict(),
+                    'optimizer_state_dict': self.optimizer.state_dict(),
+                }, os.path.join(self.cfg.snapshot_dir, "latest_checkpoint.pth"))
+                # -------------------------------------------------------------------------
 
             # End of Epoch
             avg_train_loss = np.mean(epoch_losses) if epoch_losses else 0.0
@@ -289,7 +356,6 @@ class ArcFaceTrainer:
                     "lr": self.optimizer.param_groups[0]['lr']
                 })
 
-            # Early Stopping and Checkpointing
             # Early Stopping and Checkpointing
             # Save both backbone and head for complete restoration/distillation
             self.early_stopper(val_loss, {

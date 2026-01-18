@@ -3,6 +3,12 @@ import csv
 import matplotlib.pyplot as plt
 
 
+
+import logging
+
+LOGGER = logging.getLogger(__name__)
+
+
 def log_metrics_to_csv(csv_path, headers, rows):
     os.makedirs(os.path.dirname(csv_path), exist_ok=True)
     is_new_file = not os.path.exists(csv_path)
@@ -42,4 +48,4 @@ def plot_training_curves(csv_path, save_path="./plots/training_curve.png", title
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
-    print(f" Saved plot: {save_path}")
+    LOGGER.info(f"Saved plot: {save_path}")

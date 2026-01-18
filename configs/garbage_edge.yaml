@@ -20,7 +20,7 @@ backbone:
   vit_model: null # Disabled Swin for significant speedup (Pure ResNet+CBAM is sufficient)
   pretrained: true
 embedding_size: 512
-num_classes: 6
+num_classes: 4
 
 supcon:
   enabled: true
@@ -38,6 +38,7 @@ arcface:
   snapshot_dir: "./snapshots_teacher"
   early_stopping_patience: 5
   use_amp: true # Re-enabled AMP for speed (NaNs fixed via backbone/optimizer)
+  use_curricularface: false # FALSE = Use AdaFace (Better for garbage/noise), TRUE = CurricularFace
 
 # -------------------------------------------------------------------------
 # Phase 3: The STUDENT (Tiny Edge Model)

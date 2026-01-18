@@ -147,6 +147,9 @@ def _reset_classifier(model: nn.Module) -> None:
         model.head = nn.Identity()
 
 
+import logging
+LOGGER = logging.getLogger(__name__)
+
 class HybridBackbone(nn.Module):
     def __init__(self, config: Optional[BackboneConfig] = None) -> None:
         super().__init__()
@@ -170,7 +173,7 @@ class HybridBackbone(nn.Module):
             # DEBUG: Verify weights are healthy
             for name, param in self.vit_backbone.named_parameters():
                  if torch.isnan(param).any():
-                       print(f"CRITICAL: Found NaN in pretrained ViT weights! Layer: {name}")
+                       LOGGER.criticall(f"CRITICAL: Found NaN in pretrained ViT weights! Layer: {name}")
                        raise RuntimeError(f"NaN in ViT weights: {name}")
 
             if self.cfg.token_merging_ratio:
@@ -178,7 +181,9 @@ class HybridBackbone(nn.Module):
         else:
             self.vit_backbone = nn.Identity()
 
-        # LoRA/IA3 injections
+        # LoRA/IA3 injections (omitted for brevity, assume unchanged)
+        # ... (lines 182-237)
+
         if self.cfg.cnn_lora_rank:
             lora_cfg = LoRAConfig(
                 rank=self.cfg.cnn_lora_rank,
@@ -239,7 +244,6 @@ class HybridBackbone(nn.Module):
         self.use_cbam = self.cfg.use_cbam
         self.cbam = None
         self.mixstyle_module = None
-        # initialize mixstyle with placeholder if needed or just skip during detection
         
         # Auto-detect dimensions using dummy input
         with torch.no_grad():
@@ -249,7 +253,7 @@ class HybridBackbone(nn.Module):
                 feat = self._cnn_features(dummy)
                 self.cnn_dim = feat.shape[1]
             except Exception as e:
-                print(f"Error checking CNN dimensions: {e}")
+                LOGGER.warning(f"Error checking CNN dimensions: {e}")
                 self.cnn_dim = getattr(self.cnn_backbone, "num_features", 1024)
 
             # ViT Dim
@@ -257,10 +261,10 @@ class HybridBackbone(nn.Module):
                 feat = self._vit_features(dummy)
                 self.vit_dim = feat.shape[1]
             except Exception as e:
-                 print(f"Error checking ViT dimensions: {e}")
+                 LOGGER.warning(f"Error checking ViT dimensions: {e}")
                  self.vit_dim = getattr(self.vit_backbone, "num_features", 0) if self.cfg.vit_model else 0
         
-        print(f"HybridBackbone Dimensions Detected -> CNN: {self.cnn_dim}, ViT: {self.vit_dim}")
+        LOGGER.info(f"HybridBackbone Dimensions Detected -> CNN: {self.cnn_dim}, ViT: {self.vit_dim}")
 
         # Now instantiate modules dependent on dimensions
         if self.use_cbam:
@@ -268,7 +272,7 @@ class HybridBackbone(nn.Module):
             # If num_features is missing (unlikely), fallback to detected cnn_dim (might fail if they differ)
             cbam_dim = getattr(self.cnn_backbone, "num_features", self.cnn_dim)
             self.cbam = CBAM(cbam_dim)
-            print(f"CBAM initialized with channels: {cbam_dim}")
+            LOGGER.info(f"CBAM initialized with channels: {cbam_dim}")
             
         if self.cfg.mixstyle:
             self.mixstyle_module = MixStyle(p=self.cfg.mixstyle_p, alpha=self.cfg.mixstyle_alpha)
@@ -288,8 +292,8 @@ class HybridBackbone(nn.Module):
     def _cnn_features(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.cnn_backbone.forward_features(x)
         if torch.isnan(feat).any():
-            print(f"NaN detected in RAW CNN BACKBONE output! Input stats: mean={x.mean()}, std={x.std()}")
-            import sys; sys.exit(1)
+            LOGGER.error(f"NaN detected in RAW CNN BACKBONE output! Input stats: mean={x.mean()}, std={x.std()}")
+            raise RuntimeError("NaN detected in RAW CNN BACKBONE output!")
 
         if isinstance(feat, (list, tuple)):
             feat = feat[-1]
@@ -339,25 +343,25 @@ class HybridBackbone(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         cnn_feat = self._cnn_features(x)
         if torch.isnan(cnn_feat).any() or torch.isinf(cnn_feat).any():
-             print(f"NaN/Inf detected in CNN Features! min: {cnn_feat.min()}, max: {cnn_feat.max()}")
-             import sys; sys.exit(1)
+             LOGGER.error(f"NaN/Inf detected in CNN Features! min: {cnn_feat.min()}, max: {cnn_feat.max()}")
+             raise RuntimeError("NaN/Inf detected in CNN Features!")
 
         vit_feat = self._vit_features(x)
         if torch.isnan(vit_feat).any() or torch.isinf(vit_feat).any():
-             print(f"NaN/Inf detected in ViT Features! min: {vit_feat.min()}, max: {vit_feat.max()}")
-             import sys; sys.exit(1)
+             LOGGER.error(f"NaN/Inf detected in ViT Features! min: {vit_feat.min()}, max: {vit_feat.max()}")
+             raise RuntimeError("NaN/Inf detected in ViT Features!")
 
         combined = torch.cat([cnn_feat, vit_feat], dim=1)
         
         refined = self.dha(combined)
         if torch.isnan(refined).any():
-             print("NaN detected in DHA (Attention) Output!")
-             import sys; sys.exit(1)
+             LOGGER.error("NaN detected in DHA (Attention) Output!")
+             raise RuntimeError("NaN detected in DHA (Attention) Output!")
              
         fused = self.fusion_fc(refined)
         if torch.isnan(fused).any():
-             print("NaN detected in Fusion FC Output!")
-             import sys; sys.exit(1)
+             LOGGER.error("NaN detected in Fusion FC Output!")
+             raise RuntimeError("NaN detected in Fusion FC Output!")
              
         return fused
 
@@ -365,9 +369,10 @@ class HybridBackbone(nn.Module):
 if __name__ == "__main__":
     cfg = BackboneConfig(
         vit_model="dinov2_base14",
-        lora_rank=8,
+        cnn_lora_rank=8,
+        vit_lora_rank=8,
         token_merging_ratio=0.5,
-        use_ia3=True,
+        vit_ia3=True,
     )
     model = HybridBackbone(cfg).cuda()
     dummy = torch.randn(2, 3, 224, 224).cuda()

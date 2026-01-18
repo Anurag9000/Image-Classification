@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 import os
 from typing import Optional, Tuple
 
 import torch
 import cv2
 import numpy as np
-import torchvision.transforms as T
 from PIL import Image
 
 import yaml
@@ -16,6 +16,8 @@ import yaml
 from .backbone import BackboneConfig, HybridBackbone
 from .gradcam import GradCAM
 from .losses import AdaFace
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_model(
@@ -56,7 +58,7 @@ def get_image_tensor(image_path: str, device: Optional[torch.device] = None, img
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Use EXACTLY the same transform pipeline as validation
-    from .files_dataset import get_garbage_transforms
+    from .augmentations import get_garbage_transforms
     transform = get_garbage_transforms(is_training=False, img_size=img_size)
     
     image = cv2.imread(image_path)
@@ -110,7 +112,7 @@ def run_inference(
             pred, conf = predict(tensor, model, head)
 
             writer.writerow([os.path.basename(image_path), pred, f"{conf:.4f}"])
-            print(f"{os.path.basename(image_path)} => class {pred}, conf {conf:.4f}")
+            LOGGER.info(f"{os.path.basename(image_path)} => class {pred}, conf {conf:.4f}")
 
             if gradcam_dir:
                 target_layer = None
@@ -145,7 +147,7 @@ def run_inference(
                     cam.overlay_heatmap(heatmap, tensor[0], os.path.join(gradcam_dir, os.path.basename(image_path)))
                     cam.remove_hooks()
                 else:
-                    print(f"Warning: Could not identify target layer for GradCAM on {type(cnn)}")
+                    LOGGER.warning(f"Could not identify target layer for GradCAM on {type(cnn)}")
 
 
 def parse_args() -> argparse.Namespace:

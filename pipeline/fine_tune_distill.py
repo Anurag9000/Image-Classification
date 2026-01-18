@@ -53,6 +53,10 @@ class DistillConfig:
     early_stopping_patience: int = 5
     teacher_backbone_config: dict = field(default_factory=dict) # Should be passed from global['backbone']
     val_split: float = 0.1
+    use_sam: bool = False
+    use_lookahead: bool = False
+    lookahead_k: int = 5
+    lookahead_alpha: float = 0.5
 
 class FineTuneDistillTrainer:
     def __init__(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, config: Optional[DistillConfig] = None):
@@ -134,15 +138,29 @@ class FineTuneDistillTrainer:
             self.feature_proj = nn.Linear(self.backbone_cfg.fusion_dim, self.teacher_backbone_cfg.fusion_dim).to(self.device)
             LOGGER.info(f"Added projection layer: {self.backbone_cfg.fusion_dim} -> {self.teacher_backbone_cfg.fusion_dim}")
 
-        params = list(self.backbone.parameters()) + list(self.head.parameters()) + list(self.feature_proj.parameters())
+        params = [p for p in list(self.backbone.parameters()) + list(self.head.parameters()) + list(self.feature_proj.parameters()) if p.requires_grad]
         self.trainable_params = params
         
-        # DEBUG: Standardizing optimizer to AdamW for debugging/stability
-        self.optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
+        # Optimizer Selection
+        base_optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
+        
+        if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam:
+             self.sam = SAM(self.trainable_params, base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             self.optimizer = self.sam 
+             LOGGER.info("Using SAM Optimizer for Distillation")
+        else:
+             self.sam = None
+             self.optimizer = base_optimizer
+             
+        apply_gradient_centralization(self.trainable_params)
+
+        if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
+            self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
+            LOGGER.info(f"Using Lookahead Optimizer (k={self.cfg.lookahead_k}, alpha={self.cfg.lookahead_alpha})")
 
         total_steps = self.cfg.epochs * len(self.train_loader)
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            self.optimizer,
+            self.optimizer if not self.sam else self.sam.base_optimizer,
             max_lr=self.cfg.lr * 2,
             total_steps=total_steps if total_steps > 0 else 1,
         )
@@ -194,7 +212,9 @@ class FineTuneDistillTrainer:
             teacher_head.eval()
 
             features = teacher_backbone(images)
-            logits = teacher_head(features, labels)
+            # Use raw logits (labels=None) for distillation targets. 
+            # We want the teacher's true distribution, not the margin-penalized training distribution.
+            logits = teacher_head(features, labels=None)
             soft_targets = F.softmax(logits / self.cfg.temperature, dim=1)
 
             if backbone_mode:
@@ -253,18 +273,23 @@ class FineTuneDistillTrainer:
                 labels = labels.to(self.device, non_blocking=True)
 
                 # Student Forward
+                # Student Forward
                 features = self.backbone(images)
-                logits = self.head(features, labels)
-                loss = self.criterion(logits, labels)
+                
+                # 1. Loss needs Margins
+                logits_loss = self.head(features, labels)
+                loss = self.criterion(logits_loss, labels)
                 val_loss += loss.item()
                 val_steps += 1
                 
-                student_preds.extend(torch.argmax(logits, dim=1).cpu().numpy())
+                # 2. Metrics need Raw Cosine
+                logits_raw = self.head(features, labels=None)
+                student_preds.extend(torch.argmax(logits_raw, dim=1).cpu().numpy())
                 
                 # Teacher Forward (if exists)
                 if self.teacher_backbone and self.teacher_head:
                     t_feats = self.teacher_backbone(images)
-                    t_logits = self.teacher_head(t_feats, labels)
+                    t_logits = self.teacher_head(t_feats, labels=None)
                     teacher_preds.extend(torch.argmax(t_logits, dim=1).cpu().numpy())
                 
                 all_labels.extend(labels.cpu().numpy())
@@ -308,12 +333,41 @@ class FineTuneDistillTrainer:
                         mix_loss = self._apply_manifold_mixup(student_logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
-                if self.cfg.use_amp:
+                if self.sam:
+                    self.scaler.unscale_(self.sam.base_optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
+                    
+                    def closure_first():
+                        self.sam.first_step(zero_grad=True)
+                        return loss 
+                    
+                    closure_first()
+                    
+                    with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
+                         # Re-compute for SAM step 2
+                         student_features_2 = self.backbone(mixed_x)
+                         student_logits_2 = self.head(student_features_2, y_a)
+                         loss_2 = self._distill_loss(student_logits_2, student_features_2, teacher_soft, teacher_features, y_a, y_b, lam)
+                         if self.manifold_mixup_enabled:
+                             mix_loss_2 = self._apply_manifold_mixup(student_logits_2, y_a)
+                             loss_2 = (loss_2 + mix_loss_2 * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
+
+                    self.scaler.scale(loss_2).backward()
+                    self.scaler.unscale_(self.sam.base_optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
+                    
+                    self.sam.second_step(zero_grad=True)
+                    self.scaler.update()
+
+                elif self.cfg.use_amp:
                     self.scaler.scale(loss).backward()
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.scaler.step(self.optimizer)
                     self.scaler.update()
                 else:
                     loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.optimizer.step()
                 
                 self.optimizer.zero_grad()

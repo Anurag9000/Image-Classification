@@ -4,7 +4,11 @@ from pathlib import Path
 from tqdm import tqdm
 
 # Configuration
+import logging
 import argparse
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+LOGGER = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Restructure dataset by keywords.")
@@ -88,78 +92,7 @@ KEYWORD_RULES = [
     ('rubbish', 'trash'),
 ]
 
-# Target Classes
-CLASSES = [
-    'battery',
-    'biological',
-    'cardboard',
-    'clothes',
-    'e-waste',
-    'glass',
-    'metal',
-    'paper',
-    'plastic',
-    'trash'
-]
 
-# Keyword Rules (ORDER MATTERS: Top priority first)
-# Format: (keyword, target_class)
-KEYWORD_RULES = [
-    ('battery', 'battery'),
-    ('batteries', 'battery'),
-    ('accumulators', 'battery'),
-    ('organic', 'biological'),
-    ('biological', 'biological'),
-    ('vegetable', 'biological'),
-    ('fruit', 'biological'),
-    ('food', 'biological'),
-    ('cardboard', 'cardboard'),
-    ('clothes', 'clothes'),
-    ('cloth', 'clothes'),
-    ('shoe', 'clothes'),
-    ('jeans', 'clothes'),
-    ('shirt', 'clothes'),
-    ('dress', 'clothes'),
-    ('jacket', 'clothes'),
-    ('coat', 'clothes'),
-    ('pant', 'clothes'),
-    ('textile', 'clothes'),
-    ('fabric', 'clothes'),
-    ('e-waste', 'e-waste'),
-    ('electronic', 'e-waste'),
-    ('mobile', 'e-waste'),
-    ('cell', 'e-waste'),
-    ('phone', 'e-waste'),
-    ('computer', 'e-waste'),
-    ('laptop', 'e-waste'),
-    ('pc', 'e-waste'),
-    ('monitor', 'e-waste'),
-    ('keyboard', 'e-waste'),
-    ('mouse', 'e-waste'),
-    ('motherboard', 'e-waste'),
-    ('circuit', 'e-waste'),
-    ('chip', 'e-waste'),
-    ('cable', 'e-waste'),
-    ('wire', 'e-waste'),
-    ('hard disk', 'e-waste'),
-    ('hard drive', 'e-waste'),
-    ('printer', 'e-waste'),
-    ('tablet', 'e-waste'),
-    ('glass', 'glass'),
-    ('metal', 'metal'),
-    ('alum', 'metal'),
-    ('steel', 'metal'),
-    ('copper', 'metal'),
-    ('iron', 'metal'),
-    ('tin', 'metal'),
-    ('can', 'metal'),
-    ('paper', 'paper'),
-    ('plastic', 'plastic'),
-    ('pet', 'plastic'),
-    ('trash', 'trash'),
-    ('garbage', 'trash'),
-    ('rubbish', 'trash'),
-]
 
 def ensure_dir(path):
     if not os.path.exists(path):
@@ -190,12 +123,12 @@ def main():
     SOURCE_ROOT = args.source
     DEST_ROOT = args.dest
     
-    print(f"Starting dataset restructuring...")
-    print(f"Source: {SOURCE_ROOT}")
-    print(f"Destination: {DEST_ROOT}")
+    LOGGER.info(f"Starting dataset restructuring...")
+    LOGGER.info(f"Source: {SOURCE_ROOT}")
+    LOGGER.info(f"Destination: {DEST_ROOT}")
 
     if os.path.exists(DEST_ROOT):
-        print(f"Cleaning existing destination: {DEST_ROOT}")
+        LOGGER.info(f"Cleaning existing destination: {DEST_ROOT}")
         shutil.rmtree(DEST_ROOT)
     
     ensure_dir(DEST_ROOT)
@@ -209,10 +142,10 @@ def main():
     for source_folder in SOURCE_FOLDERS:
         src_path = os.path.join(SOURCE_ROOT, source_folder)
         if not os.path.exists(src_path):
-            print(f"Warning: Source folder not found: {src_path}")
+            LOGGER.warning(f"Source folder not found: {src_path}")
             continue
             
-        print(f"Processing folder: {source_folder}...")
+        LOGGER.info(f"Processing folder: {source_folder}...")
         files = [f for f in os.listdir(src_path) if os.path.isfile(os.path.join(src_path, f))]
         
         for filename in tqdm(files, desc=source_folder):
@@ -233,17 +166,17 @@ def main():
                 total_moved += 1
                 
             except Exception as e:
-                print(f"Error moving {filename}: {e}")
+                LOGGER.error(f"Error moving {filename}: {e}")
                 errors += 1
 
-    print("\n" + "="*30)
-    print("Restructuring Complete!")
-    print("="*30)
-    print(f"Total files moved: {total_moved}")
-    print(f"Errors: {errors}")
-    print("\nClass Distribution:")
+    LOGGER.info("="*30)
+    LOGGER.info("Restructuring Complete!")
+    LOGGER.info("="*30)
+    LOGGER.info(f"Total files moved: {total_moved}")
+    LOGGER.info(f"Errors: {errors}")
+    LOGGER.info("Class Distribution:")
     for cls, count in stats.items():
-        print(f"  {cls:<12}: {count}")
+        LOGGER.info(f"  {cls:<12}: {count}")
 
 if __name__ == "__main__":
     main()

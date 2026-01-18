@@ -3,6 +3,11 @@ import json
 import glob
 from pathlib import Path
 
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+LOGGER = logging.getLogger(__name__)
+
 def generate_metadata(dataset_root, output_file):
     """
     Generates a metadata JSON file for an image classification dataset.
@@ -14,7 +19,7 @@ def generate_metadata(dataset_root, output_file):
     
     dataset_path = Path(dataset_root)
     if not dataset_path.exists():
-        print(f"Error: Dataset directory not found at {dataset_root}")
+        LOGGER.error(f"Dataset directory not found at {dataset_root}")
         return
 
     metadata = []
@@ -22,13 +27,13 @@ def generate_metadata(dataset_root, output_file):
     # Valid image extensions
     image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.gif', '*.tiff', '*.webp']
     
-    print(f"Scanning dataset at: {dataset_path.absolute()}")
+    LOGGER.info(f"Scanning dataset at: {dataset_path.absolute()}")
 
     # Iterate through class folders
     for class_dir in dataset_path.iterdir():
         if class_dir.is_dir():
             class_name = class_dir.name
-            print(f"Found class: {class_name}")
+            LOGGER.info(f"Found class: {class_name}")
             
             image_files = []
             for ext in image_extensions:
@@ -65,12 +70,12 @@ def generate_metadata(dataset_root, output_file):
                     "label": class_name
                 })
                 
-    print(f"Found {len(metadata)} total images.")
+    LOGGER.info(f"Found {len(metadata)} total images.")
     
     with open(output_file, 'w') as f:
         json.dump(metadata, f, indent=4)
         
-    print(f"Metadata saved to {output_file}")
+    LOGGER.info(f"Metadata saved to {output_file}")
 
 import argparse
 
@@ -87,8 +92,8 @@ if __name__ == "__main__":
     dataset_root = Path(args.dataset_root).resolve()
     output_file = Path(args.output).resolve()
     
-    print(f"Generating metadata...")
-    print(f"Dataset: {dataset_root}")
-    print(f"Output: {output_file}")
+    LOGGER.info(f"Generating metadata...")
+    LOGGER.info(f"Dataset: {dataset_root}")
+    LOGGER.info(f"Output: {output_file}")
     
     generate_metadata(str(dataset_root), str(output_file))

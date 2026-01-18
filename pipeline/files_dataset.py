@@ -1,31 +1,13 @@
-import os
-import cv2
-import torch
-import json
-import pandas as pd
-import numpy as np
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-from torch.utils.data import Dataset
-from typing import List, Optional, Callable
+import logging
+LOGGER = logging.getLogger(__name__)
 
 class JsonDataset(Dataset):
-    """
-    Dataset that reads from a JSON metadata file.
-    Expected JSON format: List of dicts with 'file_path' and 'label'.
-    """
-    def __init__(self, json_path: str, root_dir: str, transform: Optional[A.Compose] = None):
-        self.root_dir = root_dir
-        self.transform = transform
-        
-        with open(json_path, 'r') as f:
-            self.metadata = json.load(f)
-            
+    # ... (init) ...
         # Create class mapping
         self.classes = sorted(list(set(item['label'] for item in self.metadata)))
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
         
-        print(f"JsonDataset loaded {len(self.metadata)} images. Classes: {self.class_to_idx}")
+        LOGGER.info(f"JsonDataset loaded {len(self.metadata)} images. Classes: {self.class_to_idx}")
 
     def __len__(self):
         return len(self.metadata)
@@ -120,7 +102,7 @@ class CombinedFilesDataset(Dataset):
                 
                 self.samples.append((img_path, int(label_idx)))
 
-        print(f"Loaded {len(self.samples)} samples for split '{split}' from {len(root_dirs)} roots.")
+        LOGGER.info(f"Loaded {len(self.samples)} samples for split '{split}' from {len(root_dirs)} roots.")
 
     def __len__(self):
         return len(self.samples)
@@ -145,38 +127,7 @@ class CombinedFilesDataset(Dataset):
 
         return image, label
 
-def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
-    """
-    Returns Albumentations transforms.
-    Includes robust augmentations for training: Warp, Morph, etc.
-    """
-    if is_training:
-        return A.Compose([
-            A.Resize(img_size, img_size),
-            A.HorizontalFlip(p=0.5),
-            # Replaced ShiftScaleRotate with Affine to silence warning
-            A.Affine(scale=(0.9, 1.1), translate_percent=(-0.1, 0.1), rotate=(-30, 30), p=0.5),
-            
-            # Advanced Augmentations requested by user
-            # Heavy augmentations removed for speed optimization on single-thread loader
-            # A.OneOf([
-            #     A.ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0),
-            #     A.GridDistortion(num_steps=5, distort_limit=0.3, p=1.0),
-            #     A.OpticalDistortion(distort_limit=0.5, shift_limit=0.5, p=1.0),
-            # ], p=0.3),
 
-            # CoarseDropout args were invalid for installed version, disabling to prevent issues
-            # A.CoarseDropout(max_holes=8, max_height=16, max_width=16, p=0.3),
-            A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1, p=0.3),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ToTensorV2()
-        ])
-    else:
-        return A.Compose([
-            A.Resize(img_size, img_size),
-            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-            ToTensorV2()
-        ])
 
 def create_garbage_loader(
     root_dirs: List[str], 
@@ -198,7 +149,7 @@ def create_garbage_loader(
     
     if json_path:
         # JSON Mode
-        print(f"Creating loader from JSON: {json_path}")
+        LOGGER.info(f"Creating loader from JSON: {json_path}")
         # root_dirs[0] assumed to be data root if provided
         data_root = root_dirs[0] if root_dirs else "./data"
         
@@ -213,7 +164,7 @@ def create_garbage_loader(
         # Ensure splits aren't empty if requested
         if test_split > 0 and test_len == 0: lengths = [train_len - 1, val_len, 1] 
         
-        print(f"Splitting dataset: Train={lengths[0]}, Val={lengths[1]}, Test={lengths[2]}")
+        LOGGER.info(f"Splitting dataset: Train={lengths[0]}, Val={lengths[1]}, Test={lengths[2]}")
         
         # 1. Get indices
         indices = torch.randperm(total_len, generator=torch.Generator().manual_seed(42)).tolist()
@@ -232,7 +183,7 @@ def create_garbage_loader(
         val_dataset = torch.utils.data.Subset(val_base, val_idx)
         test_dataset = torch.utils.data.Subset(test_base, test_idx)
         
-        print(f"Created independent Subsets: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+        LOGGER.info(f"Created independent Subsets: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
         
     else:
         # CSV/Folder Mode
@@ -279,7 +230,7 @@ def create_garbage_loader(
         replacement=True
     )
     
-    print(f"WeightedRandomSampler enabled. Class counts: {class_counts}")
+    LOGGER.info(f"WeightedRandomSampler enabled. Class counts: {class_counts}")
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, 

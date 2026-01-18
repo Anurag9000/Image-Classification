@@ -9,6 +9,8 @@ from typing import List
 import yaml
 from torch.utils.data import DataLoader
 from torchvision import datasets
+import numpy as np
+from sklearn.metrics import accuracy_score, f1_score
 
 
 from .evaluate import EvaluationConfig, Evaluator
@@ -253,15 +255,8 @@ def run_evaluation_phase(full_cfg: dict) -> None:
             json_path=full_cfg["dataset"].get("json_path", None)
         )
     else:
-        # Fallback (Original logic which was broken, but keeping structure if needed)
-        LOGGER.warning("No global dataset config found, falling back to legacy loader (likely CIFAR/broken)")
-        loader = create_eval_loader(
-            batch_size=cfg.get("batch_size", 32),
-            image_size=cfg.get("image_size", 224),
-            augmentations=cfg.get("augmentations"),
-            root=cfg.get("data_root", "./data"),
-            num_workers=cfg.get("num_workers", 0),
-        )
+        LOGGER.error("No global dataset config found. Legacy loader removed as it was broken.")
+        return
 
     eval_cfg = EvaluationConfig(
         result_dir=cfg.get("result_dir", "./eval_results"),
@@ -319,9 +314,6 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
     Perform evaluation using Test Time Augmentation (TPA).
     By default, it uses the 'test' split from the garbage loader.
     """
-    import numpy as np
-    from sklearn.metrics import accuracy_score, f1_score
-    
     LOGGER.info("===> Starting TTA Evaluation")
     
     # Path logic
@@ -382,7 +374,7 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
         batch_size=cfg["dataset"].get("batch_size", 32),
         num_workers=cfg["dataset"].get("num_workers", 4),
         val_split=0.0,
-        test_split=1.0, # Use all available data as 'test' if specific subset not defined
+        test_split=cfg["dataset"].get("test_split", 0.1), # Use properly configured test split
         json_path=cfg["dataset"].get("json_path", None)
     )
 
