@@ -6,6 +6,8 @@ import os
 from typing import Optional, Tuple
 
 import torch
+import cv2
+import numpy as np
 import torchvision.transforms as T
 from PIL import Image
 
@@ -50,16 +52,23 @@ def load_model(
     return model, head
 
 
-def get_image_tensor(image_path: str, device: Optional[torch.device] = None) -> torch.Tensor:
+def get_image_tensor(image_path: str, device: Optional[torch.device] = None, img_size: int = 224) -> torch.Tensor:
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    transform = T.Compose(
-        [
-            T.Resize((224, 224)),
-            T.ToTensor(),
-        ]
-    )
-    image = Image.open(image_path).convert("RGB")
-    return transform(image).unsqueeze(0).to(device)
+    
+    # Use EXACTLY the same transform pipeline as validation
+    from .files_dataset import get_garbage_transforms
+    transform = get_garbage_transforms(is_training=False, img_size=img_size)
+    
+    image = cv2.imread(image_path)
+    if image is None:
+        raise FileNotFoundError(f"Could not read image: {image_path}")
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    
+    # Albumentations expects 'image' kwarg and returns dict
+    augmented = transform(image=image)
+    tensor = augmented['image']
+    
+    return tensor.unsqueeze(0).to(device)
 
 
 def predict(image_tensor: torch.Tensor, model, head) -> Tuple[int, float]:
@@ -114,7 +123,24 @@ def run_inference(
                     target_layer = cnn.blocks[-1]
                 
                 if target_layer:
-                    cam = GradCAM(model, target_layer, mode="gradcam++")
+                    # GradCAM requires logits, but 'model' only outputs features.
+                    # We must wrap them.
+                    class ModelWrapper(torch.nn.Module):
+                        def __init__(self, bb, h):
+                            super().__init__()
+                            self.bb = bb
+                            self.h = h
+                        def forward(self, x):
+                            return self.h(self.bb(x))
+                    
+                    wrapper = ModelWrapper(model, head)
+                    # We need to point GradCAM to the backbone INSIDE the wrapper
+                    # GradCAM registers hooks on 'target_layer'. 
+                    # target_layer is already an object reference to a layer in 'model'.
+                    # Even if 'model' is inside wrapper, target_layer object is same.
+                    # So hooks will work.
+                    
+                    cam = GradCAM(wrapper, target_layer, mode="gradcam++")
                     heatmap = cam.generate(tensor)
                     cam.overlay_heatmap(heatmap, tensor[0], os.path.join(gradcam_dir, os.path.basename(image_path)))
                     cam.remove_hooks()

@@ -40,6 +40,14 @@ class LoRAInjectedLinear(nn.Module):
         self.scaling = alpha / rank
         self.reset_parameters()
 
+    @property
+    def weight(self):
+        return self.linear.weight
+
+    @property
+    def bias(self):
+        return self.linear.bias
+
     def reset_parameters(self) -> None:
         nn.init.kaiming_uniform_(self.lora_A, a=math.sqrt(5))
         nn.init.zeros_(self.lora_B)

@@ -62,18 +62,26 @@ class Lookahead(torch.optim.Optimizer):
         self.base_optimizer.zero_grad()
 
     def state_dict(self):
-        slow_state = {id(param): self.state[param]["slow_param"] for param in self.state}
+        slow_params = []
+        for group in self.param_groups:
+            for param in group["params"]:
+                if param.requires_grad:
+                     slow_params.append(self.state[param]["slow_param"])
+        
         return {
             "base_state": self.base_optimizer.state_dict(),
-            "slow_state": slow_state,
+            "slow_idx_map": slow_params, # Ordered list of slow params
             "step": self._step,
         }
 
     def load_state_dict(self, state_dict):
         self.base_optimizer.load_state_dict(state_dict["base_state"])
         self._step = state_dict.get("step", 0)
+        
+        slow_params = state_dict.get("slow_idx_map", [])
+        idx = 0
         for group in self.param_groups:
             for param in group["params"]:
-                key = id(param)
-                if key in state_dict["slow_state"]:
-                    self.state[param]["slow_param"].copy_(state_dict["slow_state"][key])
+                if param.requires_grad and idx < len(slow_params):
+                    self.state[param]["slow_param"].copy_(slow_params[idx])
+                    idx += 1

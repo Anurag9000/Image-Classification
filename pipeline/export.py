@@ -18,6 +18,18 @@ def _load_backbone(cfg: Optional[dict], weights_path: Optional[str], device: tor
     model = HybridBackbone(backbone_cfg).to(device)
     if weights_path:
         state = torch.load(weights_path, map_location=device)
+        # Check for wrapped state dicts
+        if isinstance(state, dict):
+            if "model_state_dict" in state:
+                state = state["model_state_dict"]
+            elif "state_dict" in state:
+                # Some legacy or other tools might use this key
+                state = state["state_dict"]
+            # If "backbone" key exists (from snapshotting just backbone?), check that too.
+            # But usually snapshot saves model.state_dict().
+            if "backbone" in state: # Check for nested 'backbone' key if saved from a larger system
+                 state = state["backbone"]
+                 
         model.load_state_dict(state, strict=False)
         LOGGER.info("Loaded backbone weights from %s", weights_path)
     model.eval()

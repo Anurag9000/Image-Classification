@@ -72,15 +72,23 @@ def generate_metadata(dataset_root, output_file):
         
     print(f"Metadata saved to {output_file}")
 
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate dataset metadata JSON.")
+    parser.add_argument("--dataset-root", default="./data/Dataset_Final", help="Path to dataset root")
+    parser.add_argument("--output", default="./data/dataset_metadata.json", help="Output JSON path")
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    # Configuration based on observed structure
-    # Script location: d:\Done,Toreview\Image Classification\generate_metadata.py
-    # Dataset location: d:\Done,Toreview\Image Classification\data\Dataset_Final
-    # Desired Output: d:\Done,Toreview\Image Classification\data\dataset_metadata.json
+    args = parse_args()
     
-    BASE_DIR = Path(__file__).parent
-    DATA_DIR = BASE_DIR / "data"
-    DATASET_ROOT = DATA_DIR / "Dataset_Final"
-    OUTPUT_JSON = DATA_DIR / "dataset_metadata.json"
+    # Resolve paths
+    dataset_root = Path(args.dataset_root).resolve()
+    output_file = Path(args.output).resolve()
     
-    generate_metadata(DATASET_ROOT, OUTPUT_JSON)
+    print(f"Generating metadata...")
+    print(f"Dataset: {dataset_root}")
+    print(f"Output: {output_file}")
+    
+    generate_metadata(str(dataset_root), str(output_file))

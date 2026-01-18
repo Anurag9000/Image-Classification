@@ -49,7 +49,17 @@ class TestPipeline(unittest.TestCase):
                 target_layer = cnn.blocks[-1]
         
         if target_layer:
-            cam = GradCAM(self.model, target_layer)
+            # Wrap for GradCAM (Backbone + Head)
+            class ModelWrapper(torch.nn.Module):
+                def __init__(self, bb, h):
+                    super().__init__()
+                    self.bb = bb
+                    self.h = h
+                def forward(self, x):
+                    return self.h(self.bb(x))
+            
+            wrapper = ModelWrapper(self.model, self.head)
+            cam = GradCAM(wrapper, target_layer)
             x = torch.randn(1, 3, 192, 192).to(self.device)
             heatmap = cam.generate(x)
             self.assertEqual(heatmap.shape, (192, 192))

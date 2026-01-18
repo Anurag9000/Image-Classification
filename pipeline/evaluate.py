@@ -89,7 +89,7 @@ class Evaluator:
             aug_imgs = op(images.clone())
             with torch.no_grad():
                 features = model(aug_imgs)
-                logits = head(features, labels)
+                logits = head(features, labels=None)
                 logits_collector.append(logits)
                 preds.append(F.softmax(logits, dim=1))
 
@@ -134,7 +134,7 @@ class Evaluator:
                 for m, h in models_heads:
                     with torch.no_grad():
                         features = m(images)
-                        logits = h(features, labels)
+                        logits = h(features, labels=None)
                         logits_stack.append(logits)
                         preds.append(F.softmax(logits, dim=1))
                 avg_logits = torch.mean(torch.stack(logits_stack), dim=0)
@@ -180,7 +180,7 @@ class Evaluator:
     def _forward_single(self, model, head, images, labels):
         with torch.no_grad():
             features = model(images)
-            logits = head(features, labels)
+            logits = head(features, labels=None)
             probs = F.softmax(logits, dim=1)
         return probs, logits
 
@@ -334,8 +334,13 @@ if __name__ == "__main__":
         transforms.ToTensor(),
     ])
 
-    cifar_test = datasets.CIFAR100(root="./data", train=False, download=True, transform=transform)
-    dataloader = DataLoader(cifar_test, batch_size=32, shuffle=False, num_workers=4, pin_memory=True)
+    from .files_dataset import create_garbage_loader
+    # Dummy run example
+    _, _, dataloader = create_garbage_loader(
+        root_dirs=["./data/Dataset_Final"],
+        batch_size=32,
+        test_split=1.0 # Use full for testing
+    )
 
     evaluator = Evaluator(dataloader, num_classes=100)
     model, head = evaluator.load_model("snapshots/snapshot_epoch_30.pth", head_path="snapshots/head/snapshot_epoch_30.pth")

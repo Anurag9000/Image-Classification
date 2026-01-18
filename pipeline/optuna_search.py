@@ -11,7 +11,10 @@ from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
+import argparse
+
 def build_trial_configs(trial: optuna.Trial) -> Dict:
+    # (Same as before but keeping it clean)
     mix_method = trial.suggest_categorical("mix_method", ["mixup", "cutmix", "tokenmix", "mixtoken"])
     gamma = trial.suggest_float("gamma", 1.0, 3.0)
     smoothing = trial.suggest_float("smoothing", 0.05, 0.2)
@@ -26,12 +29,8 @@ def build_trial_configs(trial: optuna.Trial) -> Dict:
     mixstyle = trial.suggest_categorical("mixstyle", [True, False])
 
     backbone_cfg = {
-        "cnn_model": trial.suggest_categorical(
-            "cnn_model", ["convnextv2_base", "convnextv2_base.fcmae_ft_in22k_in1k"]
-        ),
-        "vit_model": trial.suggest_categorical(
-            "vit_model", ["swinv2_base_window12_192_22k", "dinov2_base14", "eva02_base_patch14_224"]
-        ),
+        "cnn_model": "convnextv2_base", # trial.suggest_categorical("cnn_model", ["convnextv2_base", ...])
+        "vit_model": "swinv2_base_window12_192_22k", # trial.suggest_categorical("vit_model", ["swinv2_base_window12_192_22k", ...])
         "token_merging_ratio": None if token_merging_ratio == 0.0 else token_merging_ratio,
         "token_learner_tokens": None if token_learner_tokens == 0 else token_learner_tokens,
         "lora_rank": None if lora_rank == 0 else lora_rank,
@@ -75,35 +74,20 @@ def build_trial_configs(trial: optuna.Trial) -> Dict:
     }
 
 
-def objective(trial: optuna.Trial) -> float:
+def objective(trial: optuna.Trial, root_dirs: list[str], num_classes: int) -> float:
     trial_cfg = build_trial_configs(trial)
 
     from .files_dataset import create_garbage_loader
-    # Hardcoded root for now or need arg parsing?
-    # Assuming user wants to run this manually or we default to the known path
-    root_dirs = [r"d:\Done,Toreview\Image Classification\data\Dataset_Final"] 
     
-    dataloader, _, _ = create_garbage_loader(
+    dataloader, val_loader, _ = create_garbage_loader(
         root_dirs=root_dirs,
         batch_size=32,
         num_workers=4,
-        val_split=0.0, # Optimize on full train set or split? usually train/val split needed for objective.
-        # But here ArcFaceTrainer splits internally? No, we pass dataloader.
-        # ArcFaceTrainer expects (train_loader, val_loader).
-        # We should get both.
+        val_split=0.2,
     )
-    
-    # We need to update ArcFaceTrainer init below to accept val_loader if we want validation metrics.
-    # The objective function tries to read from log csv which records val metrics?
-    # log csv records: epoch, avg_loss, acc, f1. These are TRAIN metrics in the current Trainer loop?
-    # Let's check train_arcface.py.
-    # It writes: avg_loss, acc, f1 (lines 308). These are computed from training loop.
-    # Validation is separate.
-    # So we can just pass train loader.
-
 
     config = ArcFaceConfig(
-        num_classes=100,
+        num_classes=num_classes,
         lr=trial_cfg["lr"],
         gamma=trial_cfg["gamma"],
         smoothing=trial_cfg["smoothing"],
@@ -121,29 +105,54 @@ def objective(trial: optuna.Trial) -> float:
     os.makedirs(snapshot_dir, exist_ok=True)
     log_csv = f"./optuna_logs/arcface_trial_{trial.number}.csv"
     os.makedirs(os.path.dirname(log_csv), exist_ok=True)
+    
+    config.snapshot_dir = snapshot_dir
+    config.log_csv = log_csv
 
     trainer = ArcFaceTrainer(
         train_loader=dataloader,
+        val_loader=val_loader,
         config=config,
     )
     trainer.train()
 
     try:
         with open(log_csv, "r", encoding="utf-8") as f:
-            last_line = f.readlines()[-1]
-        _, _, acc, f1 = last_line.strip().split(",")
-        return float(f1)
-    except Exception as exc:  # noqa: BLE001
+            lines = f.readlines()
+            if len(lines) < 2:
+                return 0.0
+            last_line = lines[-1]
+            
+        parts = last_line.strip().split(",")
+        # New format: epoch, train_loss, val_loss, val_acc, val_f1
+        if len(parts) >= 5:
+             val_f1 = float(parts[4])
+             return val_f1
+        else:
+             logging.warning("CSV format mismatch: %s", last_line)
+             return 0.0
+             
+    except Exception as exc:
         logging.error("Failed to parse metrics for trial %s: %s", trial.number, exc)
         return 0.0
 
 
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description="Run Optuna hyperparameter sweep.")
+    parser.add_argument("--data", nargs="+", default=["./data/Dataset_Final"], help="Path(s) to dataset root(s).")
+    parser.add_argument("--num_classes", type=int, default=6, help="Number of classes in dataset.")
+    parser.add_argument("--trials", type=int, default=20, help="Number of Optuna trials.")
+    args = parser.parse_args()
+
     study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=20)
+    study.optimize(lambda t: objective(t, args.data, args.num_classes), n_trials=args.trials)
 
     logging.info("Best Trial: %s", study.best_trial.params)
     with open("best_arcface_params.txt", "w", encoding="utf-8") as f:
         for k, v in study.best_trial.params.items():
             f.write(f"{k}: {v}\n")
+
+
+if __name__ == "__main__":
+    main()
 

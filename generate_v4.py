@@ -9,10 +9,17 @@ from tqdm import tqdm
 from albumentations.pytorch import ToTensorV2
 from pipeline.files_dataset import CombinedFilesDataset
 
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate V4 dataset with heavy augmentations.")
+    parser.add_argument("--config", default="configs/garbage_edge.yaml", help="Path to config file")
+    parser.add_argument("--output", default="./data/Dataset_V4", help="Output directory")
+    parser.add_argument("--variations", type=int, default=50, help="Number of variations per training image")
+    return parser.parse_args()
+
 # --- Configuration ---
-NUM_VARIATIONS = 50
-OUTPUT_ROOT = "d:/Done,Toreview/Image Classification/data/GARBAGE CLASSIFICATION 4.v4"
-CONFIG_PATH = "configs/garbage_v3.yaml"
+# Loaded from args in main()
 
 def get_heavy_transforms():
     """
@@ -65,15 +72,15 @@ def get_heavy_transforms():
         ], p=0.8),
     ])
 
-def generate_v4():
-    print(f"Loading config from {CONFIG_PATH}")
-    with open(CONFIG_PATH, 'r') as f:
+def generate_v4(config_path, output_root, num_variations):
+    print(f"Loading config from {config_path}")
+    with open(config_path, 'r') as f:
         cfg = yaml.safe_load(f)
 
     root_dirs = cfg['dataset']['root_dirs']
     print(f"Source Roots: {root_dirs}")
-    print(f"Target Root: {OUTPUT_ROOT}")
-    print(f"Variations per Image: {NUM_VARIATIONS}")
+    print(f"Target Root: {output_root}")
+    print(f"Variations per Image: {num_variations}")
 
     # Load Source Dataset (Train split mainly, we can do valid/test too if needed but usually we only augment train)
     # Actually, for offline v4, we should probably merge EVERYTHING into a massive train folder 
@@ -95,7 +102,7 @@ def generate_v4():
             continue
 
         # Create output directories
-        split_out_dir = os.path.join(OUTPUT_ROOT, split)
+        split_out_dir = os.path.join(output_root, split)
         os.makedirs(split_out_dir, exist_ok=True)
         
         # Prepare CSV data for this split
@@ -119,7 +126,7 @@ def generate_v4():
             # Standard Practice: Only augment TRAIN. 
             # I will follow standard practice: Augment TRAIN x 25. Copy VALID/TEST x 1 (Original).
             
-            num_vars = NUM_VARIATIONS if split == 'train' else 1
+            num_vars = num_variations if split == 'train' else 1
             is_aug = (split == 'train')
 
             for v in range(num_vars):
@@ -159,6 +166,12 @@ def generate_v4():
             df = df[cols]
             csv_out_path = os.path.join(split_out_dir, '_classes.csv')
             df.to_csv(csv_out_path, index=False)
+
+    print(f"V4 Generation Complete! Total Images: {total_generated}")
+
+if __name__ == "__main__":
+    args = parse_args()
+    generate_v4(args.config, args.output, args.variations)
             print(f"Saved {len(df)} entries to {csv_out_path}")
 
     print(f"\nDone! Generated {total_generated} images in total at {OUTPUT_ROOT}")

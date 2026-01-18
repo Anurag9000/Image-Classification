@@ -1,6 +1,7 @@
 import sys
 import os
 import traceback
+import unittest
 
 # Add current directory to path so we can import from 'pipeline' and 'utils'
 sys.path.append(os.getcwd())

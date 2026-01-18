@@ -17,7 +17,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from .augmentations import build_train_transform, mixup_cutmix_tokenmix
+from .augmentations import mixup_cutmix_tokenmix
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import AdaFace, CurricularFace, EvidentialLoss, FocalLoss
 from .optimizers import (
@@ -83,7 +83,6 @@ class ArcFaceTrainer:
             self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
 
         params = list(self.backbone.parameters()) + list(self.head.parameters())
-        params = list(self.backbone.parameters()) + list(self.head.parameters())
         self.trainable_params = params
         
         # DEBUG: Switch to plain AdamW to rule out SAM/Lookahead instability
@@ -118,7 +117,7 @@ class ArcFaceTrainer:
         self.wandb_run = init_wandb(self.cfg.wandb)
 
         with open(self.cfg.log_csv, "w", newline="") as f:
-            csv.writer(f).writerow(["epoch", "train_loss", "train_acc", "train_f1"])
+            csv.writer(f).writerow(["epoch", "train_loss", "val_loss", "val_acc", "val_f1"])
 
     def _update_ema(self):
         if self.backbone_ema:
@@ -129,37 +128,7 @@ class ArcFaceTrainer:
     def _compute_loss(self, logits, y_a, y_b, lam):
         return lam * self.criterion(logits, y_a) + (1 - lam) * self.criterion(logits, y_b)
 
-    def _apply_cutmix(self, data, target, alpha=1.0):
-        indices = torch.randperm(data.size(0)).to(data.device)
-        shuffled_data = data[indices]
-        shuffled_target = target[indices]
-
-        lam = np.random.beta(alpha, alpha)
-        
-        bbx1, bby1, bbx2, bby2 = self._rand_bbox(data.size(), lam)
-        data[:, :, bbx1:bbx2, bby1:bby2] = data[indices, :, bbx1:bbx2, bby1:bby2]
-        
-        # Adjust lambda to match pixel ratio
-        lam = 1 - ((bbx2 - bbx1) * (bby2 - bby1) / (data.size(2) * data.size(3)))
-        
-        return data, target, shuffled_target, lam
-
-    def _rand_bbox(self, size, lam):
-        W = size[2]
-        H = size[3]
-        cut_rat = np.sqrt(1. - lam)
-        cut_w = int(W * cut_rat)
-        cut_h = int(H * cut_rat)
-
-        cx = np.random.randint(W)
-        cy = np.random.randint(H)
-
-        bbx1 = np.clip(cx - cut_w // 2, 0, W)
-        bby1 = np.clip(cy - cut_h // 2, 0, H)
-        bbx2 = np.clip(cx + cut_w // 2, 0, W)
-        bby2 = np.clip(cy + cut_h // 2, 0, H)
-
-        return bbx1, bby1, bbx2, bby2
+    # _apply_cutmix and _rand_bbox removed as they are redundant with augmentations.py
 
     def _apply_manifold_mixup(self, logits, labels):
         lam = np.random.beta(self.cfg.manifold_mixup_alpha, self.cfg.manifold_mixup_alpha)
@@ -167,9 +136,9 @@ class ArcFaceTrainer:
         mixed_logits = lam * logits + (1 - lam) * logits[idx]
         return self._compute_loss(mixed_logits, labels, labels[idx], lam)
 
-    def _validate(self) -> tuple[float, float]:
+    def _validate(self) -> tuple[float, float, float]:
         if not self.val_loader:
-            return 0.0, 0.0
+            return 0.0, 0.0, 0.0
 
         self.backbone.eval()
         self.head.eval()
@@ -195,10 +164,11 @@ class ArcFaceTrainer:
 
         avg_val_loss = val_loss / max(val_steps, 1)
         avg_val_acc = accuracy_score(all_labels, all_preds)
+        avg_val_f1 = f1_score(all_labels, all_preds, average="macro")
         
         self.backbone.train()
         self.head.train()
-        return avg_val_loss, avg_val_acc
+        return avg_val_loss, avg_val_acc, avg_val_f1
 
     def train(self):
         self.backbone.train()
@@ -220,32 +190,33 @@ class ArcFaceTrainer:
                     LOGGER.error(f"Labels out of range! Range: [{labels.min()}, {labels.max()}], num_classes: {self.cfg.num_classes}")
                     raise ValueError(f"Invalid labels detected: {labels}")
 
-                if self.cfg.mix_method == "cutmix_internal":
-                    mixed_x, y_a, y_b, lam = self._apply_cutmix(images.clone(), labels, alpha=self.cfg.augmentations.get("cutmix_alpha", 1.0))
+                if self.cfg.mix_method in ("cutmix", "cutmix_internal"):
+                    from .augmentations import cutmix
+                    mixed_x, y_a, y_b, lam = cutmix(images.clone(), labels, alpha=self.cfg.augmentations.get("cutmix_alpha", 1.0))
                 else:
                     mixed_x, y_a, y_b, lam = mixup_cutmix_tokenmix(images.clone(), labels, method=self.cfg.mix_method)
 
                 # DEBUG: Check inputs
                 if torch.isnan(mixed_x).any() or torch.isinf(mixed_x).any():
                     LOGGER.error("NaN/Inf detected in INPUT IMAGES (mixed_x)")
-                    import sys; sys.exit(1)
+                    raise RuntimeError("NaN/Inf detected in INPUT IMAGES (mixed_x)")
 
                 # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
                 with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                     features = self.backbone(mixed_x)
                     if torch.isnan(features).any():
                         LOGGER.error("NaN detected in BACKBONE OUTPUT")
-                        import sys; sys.exit(1)
+                        raise RuntimeError("NaN/Inf detected in INPUT IMAGES (mixed_x)")
                         
                     logits = self.head(features, y_a)
                     if torch.isnan(logits).any():
                         LOGGER.error("NaN detected in HEAD OUTPUT (Logits)")
-                        import sys; sys.exit(1)
+                        raise RuntimeError("NaN/Inf detected in INPUT IMAGES (mixed_x)")
 
                     loss = self._compute_loss(logits, y_a, y_b, lam)
                     if torch.isnan(loss):
                         LOGGER.error(f"NaN detected in LOSS calculation. Logits max: {logits.max()}, min: {logits.min()}")
-                        import sys; sys.exit(1)
+                        raise RuntimeError("NaN/Inf detected in INPUT IMAGES (mixed_x)")
                     
                     if self.manifold_mixup_enabled:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
@@ -266,6 +237,8 @@ class ArcFaceTrainer:
                     loss.backward()
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     self.optimizer.step()
+
+                epoch_losses.append(loss.item())
 
                 # DEBUG: Print detailed stats every 10 steps to diagnose 0% acc
                 if step_count % 10 == 0:
@@ -290,60 +263,50 @@ class ArcFaceTrainer:
                 # self.scheduler.step() moved to correct place?
                 # OneCycleLR should step after optimizer
                 self.scheduler.step()
-
-                self.scheduler.step()
                 self._update_ema()
 
-                epoch_losses.append(loss_second.item())
-                preds_all.extend(torch.argmax(logits.detach(), dim=1).cpu().numpy())
-                labels_all.extend(labels.cpu().numpy())
+            # End of Epoch
+            avg_train_loss = np.mean(epoch_losses) if epoch_losses else 0.0
+            val_loss, val_acc, val_f1 = self._validate()
 
-                if len(epoch_losses) % 10 == 0:
-                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f}")
+            LOGGER.info(
+                f"Epoch {epoch}/{self.cfg.epochs} - Loss: {avg_train_loss:.4f} | "
+                f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc*100:.2f}% | Val F1: {val_f1:.4f}"
+            )
 
-            acc = accuracy_score(labels_all, preds_all)
-            f1 = f1_score(labels_all, preds_all, average="macro")
-            avg_loss = sum(epoch_losses) / max(len(epoch_losses), 1)
+            # Save to CSV
+            with open(self.cfg.log_csv, 'a', newline='') as f:
+                csv.writer(f).writerow([epoch, avg_train_loss, val_loss, val_acc, val_f1])
 
-            LOGGER.info("Epoch %d/%d - Loss: %.4f | Acc: %.4f | F1: %.4f", epoch, self.cfg.epochs, avg_loss, acc, f1)
-
-            with open(self.cfg.log_csv, "a", newline="") as f:
-                csv.writer(f).writerow([epoch, avg_loss, acc, f1])
-
-            if self.wandb_run:
-                current_lr = self.scheduler.get_last_lr()[0] if hasattr(self.scheduler, "get_last_lr") else self.cfg.lr
-                self.wandb_run.log(
-                    {
-                        "arcface/train_loss": avg_loss,
-                        "arcface/train_acc": acc,
-                        "arcface/train_f1": f1,
-                        "arcface/lr": current_lr,
-                    },
-                    step=epoch,
-                )
-
-            save_snapshot(self.backbone, epoch=epoch, folder=self.cfg.snapshot_dir)
-            save_snapshot(self.head, epoch=epoch, folder=os.path.join(self.cfg.snapshot_dir, "head"))
-            if self.backbone_ema and self.head_ema:
-                save_snapshot(self.backbone_ema.ema_model, epoch=epoch, folder=os.path.join(self.cfg.snapshot_dir, "ema", "backbone"))
-                save_snapshot(self.head_ema.ema_model, epoch=epoch, folder=os.path.join(self.cfg.snapshot_dir, "ema", "head"))
-
-            val_loss, val_acc = self._validate()
-            LOGGER.info(f"Epoch {epoch} Validation Loss: {val_loss:.4f} | Validation Acc: {val_acc:.4f}")
+            # WandB logging
             if self.wandb_run:
                 self.wandb_run.log({
-                    "arcface/val_loss": val_loss,
-                    "arcface/val_acc": val_acc
-                }, step=epoch)
+                    "epoch": epoch,
+                    "train_loss": avg_train_loss,
+                    "val_loss": val_loss,
+                    "val_acc": val_acc,
+                    "val_f1": val_f1,
+                    "lr": self.optimizer.param_groups[0]['lr']
+                })
 
-            self.early_stopper(val_loss, self.backbone)
+            # Early Stopping and Checkpointing
+            # Early Stopping and Checkpointing
+            # Save both backbone and head for complete restoration/distillation
+            self.early_stopper(val_loss, {
+                'model_state_dict': self.backbone.state_dict(),
+                'head_state_dict': self.head.state_dict()
+            })
             if self.early_stopper.early_stop:
-                LOGGER.info("Early stopping triggered")
+                LOGGER.info("Early stopping triggered.")
                 break
 
-        if self.wandb_run:
-            self.wandb_run.finish()
+            if epoch % 5 == 0:
+                save_snapshot(self.backbone, epoch, folder=self.cfg.snapshot_dir)
 
+        # Save Final models
+        save_snapshot(self.backbone, self.cfg.epochs, folder=self.cfg.snapshot_dir)
+        torch.save(self.head.state_dict(), os.path.join(self.cfg.snapshot_dir, "head", "head_final.pth"))
+        LOGGER.info(f"Training finished. Final models saved in {self.cfg.snapshot_dir}")
 
 def create_dataloader(
     batch_size: int = 32,
@@ -354,19 +317,18 @@ def create_dataloader(
     num_workers: int = 4,
     val_split: float = 0.1,
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    transform = build_train_transform(augmentations or {}, image_size=image_size, augment=augment)
-    dataset = datasets.CIFAR100(root=root, train=True, download=True, transform=transform)
-
-    if val_split > 0.0:
-        val_size = int(len(dataset) * val_split)
-        train_size = len(dataset) - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-    else:
-        train_dataset = dataset
-        val_dataset = None
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True) if val_dataset else None
+    from .files_dataset import create_garbage_loader
+    
+    # Check if root is a list or string (create_garbage_loader expects list)
+    root_dirs = [root] if isinstance(root, str) else root
+    
+    train_loader, val_loader, _ = create_garbage_loader(
+        root_dirs=root_dirs,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        val_split=val_split,
+        test_split=0.0, # No test split for training loader creation
+    )
 
     return train_loader, val_loader
 

@@ -44,15 +44,11 @@ def cutmix(x, y, alpha=1.0):
     batch_size, _, h, w = x.size()
     index = torch.randperm(batch_size).to(x.device)
     cx = x.clone()
-
     cut_w = int(w * np.sqrt(1 - lam))
     cut_h = int(h * np.sqrt(1 - lam))
-
-    cx = cx.clone()
     lam_adjusted = lam
     if cut_w > 0 and cut_h > 0:
-        cx = cx.clone()
-        cx2 = cx[index]
+        cx2 = x[index]  # Use original x for source patches
 
         cy = np.random.randint(0, h)
         cx_pos = np.random.randint(0, w)

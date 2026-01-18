@@ -46,8 +46,9 @@ class MixStyle(nn.Module):
         var = x.var(dim=2, keepdim=True, unbiased=False)
         sigma = torch.sqrt(var + 1e-6)
 
-        mu_shuffle = mu[torch.randperm(b)]
-        sigma_shuffle = sigma[torch.randperm(b)]
+        idx = torch.randperm(b).to(x.device)
+        mu_shuffle = mu[idx]
+        sigma_shuffle = sigma[idx]
 
         lam = self._beta.sample((b, 1, 1)).to(x.device)
 
@@ -113,16 +114,25 @@ class BackboneConfig:
     token_learner_tokens: Optional[int] = None
     freeze_cnn: bool = False
     freeze_vit: bool = False
-    lora_rank: Optional[int] = None
+    
+    # CNN Adaptation
+    cnn_lora_rank: Optional[int] = None
+    cnn_ia3: bool = False
+    
+    # ViT Adaptation
+    vit_lora_rank: Optional[int] = None
+    vit_ia3: bool = False
+    
+    # Shared Adaptation Params
     lora_alpha: int = 16
     lora_train_base: bool = False
     lora_target_modules: Tuple[str, ...] = field(
         default_factory=lambda: ("qkv", "kv", "proj", "fc", "mlp")
     )
-    use_ia3: bool = False
     ia3_target_modules: Tuple[str, ...] = field(
         default_factory=lambda: ("qkv", "kv", "proj", "fc", "mlp")
     )
+    
     cnn_drop_path_rate: float = 0.0
     vit_drop_path_rate: float = 0.2
     mixstyle: bool = False
@@ -160,48 +170,70 @@ class HybridBackbone(nn.Module):
             # DEBUG: Verify weights are healthy
             for name, param in self.vit_backbone.named_parameters():
                  if torch.isnan(param).any():
-                      print(f"CRITICAL: Found NaN in pretrained ViT weights! Layer: {name}")
-                      import sys; sys.exit(1)
+                       print(f"CRITICAL: Found NaN in pretrained ViT weights! Layer: {name}")
+                       raise RuntimeError(f"NaN in ViT weights: {name}")
 
             if self.cfg.token_merging_ratio:
                 self.vit_backbone = apply_token_merging(self.vit_backbone, ratio=self.cfg.token_merging_ratio)
         else:
             self.vit_backbone = nn.Identity()
 
-        if self.cfg.lora_rank and self.cfg.vit_model:
-            inject_lora(
-                self.vit_backbone,
-                LoRAConfig(
-                    rank=self.cfg.lora_rank,
-                    alpha=self.cfg.lora_alpha,
-                    train_base=self.cfg.lora_train_base,
-                    target_modules=self.cfg.lora_target_modules,
-                ),
+        # LoRA/IA3 injections
+        if self.cfg.cnn_lora_rank:
+            lora_cfg = LoRAConfig(
+                rank=self.cfg.cnn_lora_rank,
+                alpha=self.cfg.lora_alpha,
+                train_base=self.cfg.lora_train_base,
+                target_modules=self.cfg.lora_target_modules,
             )
+            inject_lora(self.cnn_backbone, lora_cfg)
+            # Ensure LoRA parameters are trainable even if CNN is frozen
+            for n, p in self.cnn_backbone.named_parameters():
+                if "lora_" in n or "gate" in n:
+                    p.requires_grad = True
 
-        if self.cfg.lora_rank:
-            inject_lora(
-                self.vit_backbone,
-                LoRAConfig(
-                    rank=self.cfg.lora_rank,
-                    alpha=self.cfg.lora_alpha,
-                    train_base=self.cfg.lora_train_base,
-                    target_modules=self.cfg.lora_target_modules,
-                ),
-            )
+        if self.cfg.cnn_ia3:
+            ia3_cfg = IA3Config(target_modules=self.cfg.ia3_target_modules)
+            inject_ia3(self.cnn_backbone, ia3_cfg)
+            # Ensure IA3 parameters are trainable
+            for n, p in self.cnn_backbone.named_parameters():
+                if "gate" in n:
+                    p.requires_grad = True
 
-        if self.cfg.use_ia3:
-            inject_ia3(
-                self.vit_backbone,
-                IA3Config(target_modules=self.cfg.ia3_target_modules),
+        if self.cfg.vit_lora_rank and self.cfg.vit_model:
+            lora_cfg = LoRAConfig(
+                rank=self.cfg.vit_lora_rank,
+                alpha=self.cfg.lora_alpha,
+                train_base=self.cfg.lora_train_base,
+                target_modules=self.cfg.lora_target_modules,
             )
+            inject_lora(self.vit_backbone, lora_cfg)
+            # Ensure LoRA parameters are trainable even if ViT is frozen
+            for n, p in self.vit_backbone.named_parameters():
+                if "lora_" in n or "gate" in n:
+                    p.requires_grad = True
+
+        if self.cfg.vit_ia3 and self.cfg.vit_model:
+            ia3_cfg = IA3Config(target_modules=self.cfg.ia3_target_modules)
+            inject_ia3(self.vit_backbone, ia3_cfg)
+            # Ensure IA3 parameters are trainable
+            for n, p in self.vit_backbone.named_parameters():
+                if "gate" in n:
+                    p.requires_grad = True
 
         if self.cfg.freeze_cnn:
             for param in self.cnn_backbone.parameters():
                 param.requires_grad = False
-        if self.cfg.freeze_vit and not self.cfg.lora_rank:
+        if self.cfg.freeze_vit:
             for param in self.vit_backbone.parameters():
                 param.requires_grad = False
+                
+        # CRITICAL: LoRA/IA3 parameters must remain trainable regardless of freezing
+        for m in [self.cnn_backbone, self.vit_backbone]:
+            if m is None or isinstance(m, nn.Identity): continue
+            for n, p in m.named_parameters():
+                if "lora_" in n or "gate" in n:
+                    p.requires_grad = True
         
         # Pre-initialize attributes to avoid AttributeError during detection
         self.use_cbam = self.cfg.use_cbam
@@ -266,7 +298,7 @@ class HybridBackbone(nn.Module):
             feat = self.cbam(feat)
             if torch.isnan(feat).any():
                 print("NaN detected in CBAM output!")
-                import sys; sys.exit(1)
+                raise RuntimeError("NaN detected in output!")
 
         if self.mixstyle_module and self.training and isinstance(feat, torch.Tensor) and feat.dim() == 4:
             feat = self.mixstyle_module(feat)

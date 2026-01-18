@@ -14,7 +14,7 @@ from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from .augmentations import build_train_transform, mixup_cutmix_tokenmix
+from .augmentations import mixup_cutmix_tokenmix
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import AdaFace, EvidentialLoss, FocalLoss
 from .optimizers import Lookahead, ModelEMA, SAM, apply_gradient_centralization
@@ -88,10 +88,35 @@ class FineTuneDistillTrainer:
                 param.requires_grad = False
         else:
             LOGGER.warning("No teacher backbone path found or file does not exist. Distillation might fail if weights expected.")
+        # Try to load head from backbone path if specific head path is missing
+        if not self.cfg.teacher_head_path and self.cfg.teacher_backbone_path and os.path.exists(self.cfg.teacher_backbone_path):
+             LOGGER.info("Attempting to load teacher head from backbone path: %s", self.cfg.teacher_backbone_path)
+             try:
+                 state = torch.load(self.cfg.teacher_backbone_path, map_location=self.device)
+                 # Check if 'head' or 'head_state_dict' is in the checkpoint
+                 head_state = None
+                 if isinstance(state, dict):
+                     if "head_state_dict" in state: head_state = state["head_state_dict"]
+                     elif "head" in state: head_state = state["head"]
+                 
+                 if head_state:
+                     self.teacher_head = AdaFace(embedding_size=self.teacher_backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+                     self.teacher_head.load_state_dict(head_state, strict=False)
+                     self.teacher_head.eval()
+                     for param in self.teacher_head.parameters():
+                         param.requires_grad = False
+                     LOGGER.info("Successfully loaded teacher head from backbone checkpoint.")
+             except Exception as e:
+                 LOGGER.warning(f"Could not auto-load teacher head from backbone path: {e}")
+
         if self.cfg.teacher_head_path and os.path.exists(self.cfg.teacher_head_path):
             LOGGER.info("Loading teacher head from %s", self.cfg.teacher_head_path)
             state = torch.load(self.cfg.teacher_head_path, map_location=self.device)
-            self.head.load_state_dict(state, strict=False)
+            # Handle wrapped state dicts common in snapshots
+            if isinstance(state, dict): 
+                if "head_state_dict" in state: state = state["head_state_dict"]
+                elif "head" in state: state = state["head"]
+            
             self.teacher_head = AdaFace(embedding_size=self.teacher_backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
             self.teacher_head.load_state_dict(state, strict=False)
             self.teacher_head.eval()
@@ -104,9 +129,12 @@ class FineTuneDistillTrainer:
         if self.teacher_head:
             save_snapshot(self.teacher_head, epoch=0, folder=os.path.join(self.cfg.snapshot_dir, "teacher_head"))
 
-        params = list(self.backbone.parameters()) + list(self.head.parameters())
-        self.trainable_params = params
-        params = list(self.backbone.parameters()) + list(self.head.parameters())
+        self.feature_proj = nn.Identity()
+        if self.backbone_cfg.fusion_dim != self.teacher_backbone_cfg.fusion_dim:
+            self.feature_proj = nn.Linear(self.backbone_cfg.fusion_dim, self.teacher_backbone_cfg.fusion_dim).to(self.device)
+            LOGGER.info(f"Added projection layer: {self.backbone_cfg.fusion_dim} -> {self.teacher_backbone_cfg.fusion_dim}")
+
+        params = list(self.backbone.parameters()) + list(self.head.parameters()) + list(self.feature_proj.parameters())
         self.trainable_params = params
         
         # DEBUG: Standardizing optimizer to AdamW for debugging/stability
@@ -143,9 +171,22 @@ class FineTuneDistillTrainer:
             teacher_backbone = self.teacher_backbone or (
                 self.backbone_ema.ema_model if self.cfg.use_ema_teacher and self.backbone_ema else self.backbone
             )
-            teacher_head = self.teacher_head or (
-                self.head_ema.ema_model if self.cfg.use_ema_teacher and self.head_ema else self.head
-            )
+            
+            # CRITICAL: Do NOT fallback to student head if teacher backbone is present but head is missing.
+            # This causes dimension mismatches (e.g. Teacher 1024 != Student 512).
+            # Fallback only if we are in pure self-distillation mode (no external teacher backbone).
+            if self.teacher_backbone:
+                if self.teacher_head:
+                    teacher_head = self.teacher_head
+                else:
+                    # If we have a teacher backbone but NO head, we cannot compute soft targets accurately.
+                    # We should disable the head part of the forward pass or raise a warning/error.
+                    # For now, let's raise RuntimeError to be safe as configured.
+                    raise RuntimeError("Teacher backbone loaded but NO teacher head available! Provide 'teacher_head_path' or ensure checkpoint contains head weights.")
+            else:
+                teacher_head = self.teacher_head or (
+                    self.head_ema.ema_model if self.cfg.use_ema_teacher and self.head_ema else self.head
+                )
 
             backbone_mode = teacher_backbone.training
             head_mode = teacher_head.training
@@ -169,7 +210,9 @@ class FineTuneDistillTrainer:
             F.log_softmax(student_logits / self.cfg.temperature, dim=1),
             teacher_soft,
         ) * (self.cfg.temperature**2)
-        feature_loss = self.feature_mse(student_features, teacher_features)
+        
+        projected_student_features = self.feature_proj(student_features)
+        feature_loss = self.feature_mse(projected_student_features, teacher_features)
         return (
             (1 - self.cfg.distill_weight) * hard_loss
             + (self.cfg.distill_weight / 2) * soft_loss
@@ -350,20 +393,22 @@ def create_distill_loader(
     root: str = "./data",
     num_workers: int = 4,
     val_split: float = 0.1,
+    json_path: Optional[str] = None,
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    transform = build_train_transform(augmentations or {}, image_size=image_size, augment=True)
-    dataset = datasets.CIFAR100(root=root, train=True, download=True, transform=transform)
-
-    if val_split > 0.0:
-        val_size = int(len(dataset) * val_split)
-        train_size = len(dataset) - val_size
-        train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
-    else:
-        train_dataset = dataset
-        val_dataset = None
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True) if val_dataset else None
+    from .files_dataset import create_garbage_loader
+    
+    # Just like ArcFace, unify data loading
+    # Check if root is a list or string 
+    root_dirs = [root] if isinstance(root, str) else root
+    
+    train_loader, val_loader, _ = create_garbage_loader(
+        root_dirs=root_dirs,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        val_split=val_split,
+        test_split=0.0,
+        json_path=json_path,
+    )
 
     return train_loader, val_loader
 

@@ -4,11 +4,89 @@ from pathlib import Path
 from tqdm import tqdm
 
 # Configuration
-SOURCE_ROOT = r"d:\Done,Toreview\Image Classification\data\Dataset_Final"
-DEST_ROOT = r"d:\Done,Toreview\Image Classification\data\Dataset_Restructured"
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Restructure dataset by keywords.")
+    parser.add_argument("--source", default="./data/Dataset_Final", help="Source dataset root")
+    parser.add_argument("--dest", default="./data/Dataset_Restructured", help="Destination root")
+    return parser.parse_args()
 
 # Source folders to scan
 SOURCE_FOLDERS = ['organic', 'other', 'paper', 'plastic']
+
+# Target Classes
+CLASSES = [
+    'battery',
+    'biological',
+    'cardboard',
+    'clothes',
+    'e-waste',
+    'glass',
+    'metal',
+    'paper',
+    'plastic',
+    'trash'
+]
+
+# Keyword Rules (ORDER MATTERS: Top priority first)
+# Format: (keyword, target_class)
+KEYWORD_RULES = [
+    ('battery', 'battery'),
+    ('batteries', 'battery'),
+    ('accumulators', 'battery'),
+    ('organic', 'biological'),
+    ('biological', 'biological'),
+    ('vegetable', 'biological'),
+    ('fruit', 'biological'),
+    ('food', 'biological'),
+    ('cardboard', 'cardboard'),
+    ('clothes', 'clothes'),
+    ('cloth', 'clothes'),
+    ('shoe', 'clothes'),
+    ('jeans', 'clothes'),
+    ('shirt', 'clothes'),
+    ('dress', 'clothes'),
+    ('jacket', 'clothes'),
+    ('coat', 'clothes'),
+    ('pant', 'clothes'),
+    ('textile', 'clothes'),
+    ('fabric', 'clothes'),
+    ('e-waste', 'e-waste'),
+    ('electronic', 'e-waste'),
+    ('mobile', 'e-waste'),
+    ('cell', 'e-waste'),
+    ('phone', 'e-waste'),
+    ('computer', 'e-waste'),
+    ('laptop', 'e-waste'),
+    ('pc', 'e-waste'),
+    ('monitor', 'e-waste'),
+    ('keyboard', 'e-waste'),
+    ('mouse', 'e-waste'),
+    ('motherboard', 'e-waste'),
+    ('circuit', 'e-waste'),
+    ('chip', 'e-waste'),
+    ('cable', 'e-waste'),
+    ('wire', 'e-waste'),
+    ('hard disk', 'e-waste'),
+    ('hard drive', 'e-waste'),
+    ('printer', 'e-waste'),
+    ('tablet', 'e-waste'),
+    ('glass', 'glass'),
+    ('metal', 'metal'),
+    ('alum', 'metal'),
+    ('steel', 'metal'),
+    ('copper', 'metal'),
+    ('iron', 'metal'),
+    ('tin', 'metal'),
+    ('can', 'metal'),
+    ('paper', 'paper'),
+    ('plastic', 'plastic'),
+    ('pet', 'plastic'),
+    ('trash', 'trash'),
+    ('garbage', 'trash'),
+    ('rubbish', 'trash'),
+]
 
 # Target Classes
 CLASSES = [
@@ -108,6 +186,10 @@ def get_target_class(filename, source_folder):
     return 'trash' # Updates fallthrough
 
 def main():
+    args = parse_args()
+    SOURCE_ROOT = args.source
+    DEST_ROOT = args.dest
+    
     print(f"Starting dataset restructuring...")
     print(f"Source: {SOURCE_ROOT}")
     print(f"Destination: {DEST_ROOT}")

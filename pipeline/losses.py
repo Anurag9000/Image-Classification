@@ -86,7 +86,11 @@ class CurricularFace(nn.Module):
         one_hot.scatter_(1, labels.view(-1, 1), 1)
 
         hard_mask = cosine > target_cos
-        self.t.data = 0.01 * cosine[hard_mask].mean().detach() + 0.99 * self.t.data if hard_mask.sum() > 0 else self.t.data
+        if hard_mask.sum() > 0:
+            self.t.data = 0.01 * cosine[hard_mask].mean().detach() + 0.99 * self.t.data
+        else:
+            # Keep t as is if no hard samples
+            pass
 
         output = torch.where(one_hot.bool(), target_cos, (cosine + self.t).clamp(-1, 1))
         output *= self.s

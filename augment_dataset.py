@@ -7,13 +7,17 @@ from pathlib import Path
 from tqdm import tqdm
 
 # --- Configuration ---
-# --- Configuration ---
-NUM_VARIATIONS = 10
-BASE_DIR = Path(__file__).parent
-DATA_DIR = BASE_DIR / "data"
-INPUT_DIR = DATA_DIR / "Dataset_Final"
-OUTPUT_DIR = DATA_DIR / "Dataset_Final_Aug"
-METADATA_FILE = DATA_DIR / "dataset_aug_metadata.json"
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Augment dataset offline.")
+    parser.add_argument("--input", default="./data/Dataset_Final", help="Input dataset directory")
+    parser.add_argument("--output", default="./data/Dataset_Final_Aug", help="Output directory")
+    parser.add_argument("--variations", type=int, default=10, help="Variations per image")
+    return parser.parse_args()
+
+# Configuration
+# Loaded from args
 
 def get_garbage_transforms():
     """
@@ -60,14 +64,17 @@ def get_garbage_transforms():
         ], p=0.6), # Increased from 0.5 to ensure lighting variety
     ])
 
-def augment_dataset():
-    if not INPUT_DIR.exists():
-        print(f"Error: Input directory {INPUT_DIR} does not exist.")
+def augment_dataset(input_dir, output_dir, num_variations, metadata_file):
+    input_path = Path(input_dir)
+    output_path = Path(output_dir)
+    
+    if not input_path.exists():
+        print(f"Error: Input directory {input_path} does not exist.")
         return
 
-    print(f"Augmenting from: {INPUT_DIR}")
-    print(f"Saving to: {OUTPUT_DIR}")
-    print(f"Variations per image: {NUM_VARIATIONS}")
+    print(f"Augmenting from: {input_path}")
+    print(f"Saving to: {output_path}")
+    print(f"Variations per image: {num_variations}")
 
     transform = get_garbage_transforms()
     metadata = []
@@ -78,7 +85,7 @@ def augment_dataset():
     # Walk through input directory
     total_files = 0
     # First pass to count for tqdm
-    for root, dirs, files in os.walk(INPUT_DIR):
+    for root, dirs, files in os.walk(input_path):
         for f in files:
             if Path(f).suffix.lower() in valid_exts:
                 total_files += 1
@@ -87,12 +94,12 @@ def augment_dataset():
     
     pbar = tqdm(total=total_files, desc="Augmenting")
 
-    for class_dir in INPUT_DIR.iterdir():
+    for class_dir in input_path.iterdir():
         if not class_dir.is_dir():
             continue
             
         class_name = class_dir.name
-        output_class_dir = OUTPUT_DIR / class_name
+        output_class_dir = output_path / class_name
         output_class_dir.mkdir(parents=True, exist_ok=True)
 
         for img_path in class_dir.iterdir():
@@ -107,29 +114,25 @@ def augment_dataset():
             
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-            # 1. PROCESS ORIGINAL (Simply Copy/Resize or just Copy? Plan said "Copy original")
-            # But we might want resize consistency? Let's just save the original as best quality 
-            # or apply only Resize. Let's keep original "Same as source" effectively by saving the read image.
-            # Actually, to save space/time and consistency, let's just resize original too if we want 224x224.
-            # But user said "Folder exactly as they are". Let's simply copy using CV2 to ensure format consistency.
-            
             # Save Original
             original_dest = output_class_dir / img_path.name
-            # For metadata path, we want relative to DATA_DIR potentially
-            try:
-                rel_path = original_dest.relative_to(DATA_DIR)
-            except ValueError:
-                rel_path = original_dest
             
+            # Save the original (resized to match augmented if desired, or just saved)
+            # Here we save it as BGR for consistency
             cv2.imwrite(str(original_dest), cv2.cvtColor(image, cv2.COLOR_RGB2BGR))
+            
+            # Recompute relative path for metadata
+            # We'll use the output_path's parent or just the relative path to output_path
+            rel_path = str(original_dest.relative_to(output_path.parent))
+            
             metadata.append({
-                "file_path": str(rel_path),
+                "file_path": rel_path,
                 "label": class_name,
                 "type": "original"
             })
 
             # 2. GENERATE AUGMENTED
-            for i in range(NUM_VARIATIONS):
+            for i in range(num_variations):
                 try:
                     aug = transform(image=image)
                     aug_img = aug['image']
@@ -139,13 +142,10 @@ def augment_dataset():
                     
                     cv2.imwrite(str(aug_dest), cv2.cvtColor(aug_img, cv2.COLOR_RGB2BGR))
                     
-                    try:
-                        aug_rel_path = aug_dest.relative_to(DATA_DIR)
-                    except ValueError:
-                        aug_rel_path = aug_dest
+                    aug_rel_path = str(aug_dest.relative_to(output_path.parent))
 
                     metadata.append({
-                        "file_path": str(aug_rel_path),
+                        "file_path": aug_rel_path,
                         "label": class_name,
                         "type": "augmented"
                     })
@@ -157,10 +157,14 @@ def augment_dataset():
     pbar.close()
     
     # Save Metadata
-    with open(METADATA_FILE, 'w') as f:
+    m_file = Path(metadata_file)
+    m_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(m_file, 'w') as f:
         json.dump(metadata, f, indent=4)
     
-    print(f"Augmentation Complete. Metadata with {len(metadata)} entries saved to {METADATA_FILE}")
+    print(f"Augmentation Complete. Metadata with {len(metadata)} entries saved to {m_file}")
 
 if __name__ == "__main__":
-    augment_dataset()
+    args = parse_args()
+    meta_path = Path(args.output).parent / "dataset_aug_metadata.json"
+    augment_dataset(args.input, args.output, args.variations, meta_path)

@@ -10,7 +10,7 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import datasets
 
-from .augmentations import build_train_transform
+
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import SupConLoss
 from .optimizers import ModelEMA, SAM, apply_gradient_centralization
@@ -82,12 +82,12 @@ class SupConPretrainer:
                 feats = self.model(images)
                 if torch.isnan(feats).any():
                      print("NaN detected in SupCon Model Output (Features)!")
-                     import sys; sys.exit(1)
+                     raise RuntimeError("NaN detected in SupCon Model Output (Features)!")
                 
                 loss = self.loss_fn(feats, expanded_labels)
                 if torch.isnan(loss):
                      print("NaN detected in SupCon Loss!")
-                     import sys; sys.exit(1)
+                     raise RuntimeError("NaN detected in SupCon Model Output (Features)!")
 
             if self.cfg.use_amp:
                 self.scaler.scale(loss).backward()
@@ -112,7 +112,7 @@ class SupConPretrainer:
             if step % 10 == 0:
                 LOGGER.info("SupCon Step [%d/%d] - Loss: %.4f", step, self.cfg.steps, loss_second.item())
 
-        torch.save(self.model.state_dict(), self.cfg.snapshot_path)
+        torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
         LOGGER.info("SupCon pretraining finished. Final model saved at %s", self.cfg.snapshot_path)
 
 

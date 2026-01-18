@@ -7,6 +7,7 @@ Reference:
 
 from __future__ import annotations
 
+import torch
 import functools
 import types
 from typing import Iterable, Any
