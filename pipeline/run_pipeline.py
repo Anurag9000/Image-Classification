@@ -350,8 +350,18 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
 
 
 def run_pipeline(config_path: str, phases: List[str]) -> None:
+
+    # Auto-generate unique log file
+    import datetime
+    os.makedirs("./logs", exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = f"./logs/pipeline_{timestamp}.log"
+    print(f"Logging to: {os.path.abspath(log_file)}")
+    
+    setup_logger(log_file)
+    
+    LOGGER.info(f"Loading config from: {config_path}")
     cfg = load_config(config_path)
-    setup_logger(cfg.get("logging", {}).get("file", "./logs/full_pipeline.log"))
 
     phase_map = {
         "supcon": lambda: run_supcon_phase(cfg), # Pass FULL config to access dataset/backbone

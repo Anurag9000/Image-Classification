@@ -6,7 +6,7 @@ dataset:
   root_dirs:
     - "d:/Done,Toreview/Image Classification/data"
   json_path: "d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json"
-  batch_size: 256  # Increased to 256
+  batch_size: 64  # Reverted to 64 due to OOM
   num_workers: 4
   val_split: 0.1
   test_split: 0.1
@@ -25,9 +25,10 @@ num_classes: 6
 supcon:
   enabled: true
   epochs: 100 
-  batch_size: 256 # Increased to 256 as requested by user
+  batch_size: 64 # Reverted to 64 due to OOM with 256
   num_views: 2
   lr: 1.0e-5 # Set to 1e-5 as requested
+  steps: 10000 # Increased to ~1 epoch (617k / 64) for meaningful pre-training
 
 
 arcface:

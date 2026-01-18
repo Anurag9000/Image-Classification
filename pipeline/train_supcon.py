@@ -116,6 +116,36 @@ class SupConPretrainer:
         LOGGER.info("SupCon pretraining finished. Final model saved at %s", self.cfg.snapshot_path)
 
 
+
+# RE-IMPLEMENTING LOADER LOGIC FOR SUPCON CORRECTLY
+from .files_dataset import JsonDataset, get_garbage_transforms
+
+# Custom Transform Wrapper for MultiView
+class MultiViewTransform:
+    def __init__(self, transform, num_views=2):
+        self.transform = transform
+        self.num_views = num_views
+    
+    def __call__(self, image):
+        # image is opencv numpy array
+        views = []
+        for _ in range(self.num_views):
+            res = self.transform(image=image)
+            views.append(res['image'])
+        return torch.stack(views)
+
+class AlbumentationsMultiViewAdapter:
+    def __init__(self, transform, num_views=2):
+        self.transform = transform
+        self.num_views = num_views
+    def __call__(self, image, **kwargs):
+        views = []
+        for _ in range(self.num_views):
+            res = self.transform(image=image)
+            views.append(res['image'])
+        # Stack them: (V, C, H, W)
+        return {'image': torch.stack(views)}
+
 def create_supcon_loader(
     batch_size: int = 16,
     image_size: int = 224,
@@ -128,39 +158,8 @@ def create_supcon_loader(
     # Use the shared garbage transforms but customized for Multi-View
     # Ideally SupCon needs specific TwoCropTransform.
     # For now, let's just use the robust training transform from files_dataset and apply it twice.
-    from .files_dataset import get_garbage_transforms, JsonDataset, CombinedFilesDataset
     import torch
     
-    transform = get_garbage_transforms(is_training=True, img_size=image_size)
-
-    class MultiViewWrapper(torch.utils.data.Dataset):
-        def __init__(self, dataset, num_views=2):
-            self.dataset = dataset
-            self.num_views = num_views
-            
-        def __len__(self):
-            return len(self.dataset)
-            
-        def __getitem__(self, idx):
-            raise NotImplementedError("SupCon logic requires raw image access. Use 'files_dataset.JsonDataset' directly.")
-
-    # RE-IMPLEMENTING LOADER LOGIC FOR SUPCON CORRECTLY
-    from .files_dataset import JsonDataset
-    
-    # Custom Transform Wrapper for MultiView
-    class MultiViewTransform:
-        def __init__(self, transform, num_views=2):
-            self.transform = transform
-            self.num_views = num_views
-        
-        def __call__(self, image):
-            # image is opencv numpy array
-            views = []
-            for _ in range(self.num_views):
-                res = self.transform(image=image)
-                views.append(res['image'])
-            return torch.stack(views)
-
     # Allow passing json_path via 'root' if it looks like a json, or explicit arg
     if root.endswith(".json"):
         json_path = root
@@ -169,30 +168,8 @@ def create_supcon_loader(
         root_dir = root
 
     raw_transform = get_garbage_transforms(is_training=True, img_size=image_size)
-    mv_transform = MultiViewTransform(raw_transform, num_views=num_views)
     
-    # We need a Dataset that DOES NOT apply transform itself, but lets us apply it.
-    # JsonDataset from files_dataset applies transform.
-    # We will subclass or specific usage.
-    # Let's use JsonDataset but pass our MV transform!
-    # JsonDataset calls transform(image=image). Our MV transform expects image=image.
-    # BUT our MV returns a Tensor stack.
-    # JsonDataset expects dict['image'] output from albumentations? 
-    # Line 54: image = augmented['image']
-    # So our transform must return {'image': TensorStack}.
-    
-    class AlbumentationsMultiViewAdapter:
-        def __init__(self, transform, num_views=2):
-            self.transform = transform
-            self.num_views = num_views
-        def __call__(self, image, **kwargs):
-            views = []
-            for _ in range(self.num_views):
-                res = self.transform(image=image)
-                views.append(res['image'])
-            # Stack them: (V, C, H, W)
-            return {'image': torch.stack(views)}
-
+    # Use the global adapter class (pickleable)
     adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=num_views)
     
     if json_path:
