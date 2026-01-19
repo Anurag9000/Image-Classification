@@ -33,14 +33,14 @@ supcon:
   steps: 500000       # High steps to ensure epochs run
   use_sam: false      # Disabled for Speed/VRAM
   use_lookahead: false # Disabled for VRAM
-  early_stopping_patience: 10 # Reverted to 10
+  early_stopping_patience: 50 # Local: 50
 
 arcface:
   enabled: true
   epochs: 20
   lr: 1.0e-5
   snapshot_dir: "./snapshots_teacher"
-  early_stopping_patience: 10 # Reverted to 10
+  early_stopping_patience: 50 # Local: 50
   use_amp: true 
   use_curricularface: false 
   ema_decay: null     # RAM SAVING: Disabled
@@ -70,7 +70,7 @@ distill:
   
   log_csv: "./logs/distill_edge_metrics.csv"
   snapshot_dir: "./snapshots_edge_student"
-  early_stopping_patience: 10 # Reverted to 10
+  early_stopping_patience: 50 # Local: 50
   use_sam: false        # Disabled
   use_lookahead: false  # Disabled
   ema_decay: null       # Disabled
