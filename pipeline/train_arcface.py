@@ -172,7 +172,10 @@ class ArcFaceTrainer:
         all_labels = []
 
         with torch.no_grad():
-            for images, labels in self.val_loader:
+            limit_batches = 50 # Optimization for frequent checks
+            for i, (images, labels) in enumerate(self.val_loader):
+                if limit_batches and i >= limit_batches:
+                    break
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
@@ -250,68 +253,37 @@ class ArcFaceTrainer:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
-                if step_count % 100 == 0:
+                if step_count % 10 == 0:
                     LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
                     torch.cuda.empty_cache()
-
-                # Calculate simple accuracy for monitoring
-                # Calculate simple accuracy for monitoring
-                with torch.no_grad():
-                    # ACCURACY MUST BE CALCULATED ON CLEAN LOGITS (No Margins)
-                    # AdaFace/ArcFace margins penalize the target class, often making it the MINIMUM score initially.
-                    clean_logits = self.head(features, labels=None) 
-                    preds = torch.argmax(clean_logits, dim=1)
-                    acc = (preds == labels).float().mean() * 100.0
                     
-                # Optimization Step
-                if self.sam:
-                    # SAM requires two forward-backward passes
-                    # 1. First Step (done above with loss.backward)
-                    self.scaler.unscale_(self.sam.base_optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
+                    # 1. Frequent Validation Check (Every 10 steps)
+                    val_loss_str = "N/A"
+                    patience_str = "N/A"
+                    acc_str = "N/A"
                     
-                    # SAM First Step: ascends to local maximum
-                    def closure_first():
-                        self.sam.first_step(zero_grad=True)
-                        return loss # Not strictly used by first_step but cleaner signature if needed
+                    if self.val_loader:
+                         v_loss, v_acc, v_f1 = self._validate()
+                         val_loss_str = f"{v_loss:.4f}"
+                         acc_str = f"{v_acc*100:.2f}%"
+                         
+                         # Early Stopping Check
+                         if self.early_stopper:
+                             self.early_stopper(v_loss, {
+                                'model_state_dict': self.backbone.state_dict(),
+                                'head_state_dict': self.head.state_dict()
+                             })
+                             patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
+
+                             if self.early_stopper.early_stop:
+                                 LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
+                                 LOGGER.info("Early stopping triggered in ArcFace Phase!")
+                                 break
                     
-                    closure_first()
+                    # Combined Log
+                    LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}% - ValLoss: {val_loss_str} - Patience: {patience_str}")
                     
-                    # 2. Second Forward-Backward (Calculate gradient at max)
-                    with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
-                         # Re-compute features/loss at new point
-                         features_2 = self.backbone(mixed_x)
-                         logits_2 = self.head(features_2, y_a)
-                         loss_2 = self._compute_loss(logits_2, y_a, y_b, lam)
-                         if self.manifold_mixup_enabled:
-                             mix_loss_2 = self._apply_manifold_mixup(logits_2, y_a)
-                             loss_2 = (loss_2 + mix_loss_2 * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
-
-                    self.scaler.scale(loss_2).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
-                    
-                    # SAM Second Step: descends gradient
-                    self.sam.second_step(zero_grad=True)
-                    self.scaler.update()
-
-                elif self.cfg.use_amp:
-                    self.scaler.scale(loss).backward()
-                    self.scaler.unscale_(self.optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
-                    self.scaler.step(self.optimizer) 
-                    self.scaler.update()
-                else:
-                    loss.backward()
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
-                    self.optimizer.step()
-
-                epoch_losses.append(loss.item())
-
-                # DEBUG: Print detailed stats
-                if step_count % 50 == 0:
-                     LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}%")
-                     if acc.item() == 0.0:
+                    if acc.item() == 0.0:
                          LOGGER.warning("CRITICAL: Accuracy is EXACTLY 0.0!")
 
                 # Zero grad for next step

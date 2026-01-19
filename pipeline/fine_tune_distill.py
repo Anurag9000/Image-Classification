@@ -268,7 +268,10 @@ class FineTuneDistillTrainer:
         all_labels = []
 
         with torch.no_grad():
-            for images, labels in self.val_loader:
+            limit_batches = 50
+            for i, (images, labels) in enumerate(self.val_loader):
+                if limit_batches and i >= limit_batches:
+                    break
                 images = images.to(self.device, non_blocking=True)
                 labels = labels.to(self.device, non_blocking=True)
 
@@ -383,11 +386,29 @@ class FineTuneDistillTrainer:
                 preds_all.extend(torch.argmax(student_logits.detach(), dim=1).cpu().numpy())
                 labels_all.extend(labels.cpu().numpy())
  
-                if step_count % 100 == 0:
+                if step_count % 10 == 0:
                      torch.cuda.empty_cache()
-
-                if len(epoch_losses) % 10 == 0:
-                    LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f}")
+                     
+                     # Frequent Validation Check (Every 10 steps)
+                     val_loss_str = "N/A"
+                     patience_str = "N/A"
+                     student_acc_str = "N/A"
+                     
+                     if self.val_loader:
+                         v_loss, v_acc, t_acc = self._validate()
+                         val_loss_str = f"{v_loss:.4f}"
+                         student_acc_str = f"{v_acc*100:.2f}%"
+                         
+                         if self.early_stopper:
+                             self.early_stopper(v_loss, self.backbone)
+                             patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
+                             
+                             if self.early_stopper.early_stop:
+                                 LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
+                                 LOGGER.info("Early stopping triggered in Distill Phase!")
+                                 break
+                     
+                     LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str}")
 
             acc = accuracy_score(labels_all, preds_all)
             f1 = f1_score(labels_all, preds_all, average="macro")

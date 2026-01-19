@@ -32,14 +32,14 @@ supcon:
   steps: 500
   use_sam: true       # CLOUD MODE: Enable SAM
   use_lookahead: true # CLOUD MODE: Enable Lookahead
-  early_stopping_patience: 10 # Stop if loss stagnates
+  early_stopping_patience: 50 # Increased to 50
 
 arcface:
   enabled: true
   epochs: 50
   lr: 1.0e-4 
   snapshot_dir: "./snapshots_teacher"
-  early_stopping_patience: 10
+  early_stopping_patience: 50 # Increased to 50
   use_amp: true 
   use_curricularface: false # AdaFace fits garbage best
   ema_decay: 0.9995   # CLOUD MODE: Enable EMA for smoothness
@@ -72,7 +72,7 @@ distill:
   
   log_csv: "./logs/distill_edge_metrics.csv"
   snapshot_dir: "./snapshots_edge_student"
-  early_stopping_patience: 10
+  early_stopping_patience: 50 # Increased to 50
   use_sam: true         # CLOUD MODE: Enable SAM
   use_lookahead: true   # CLOUD MODE: Enable Lookahead
   ema_decay: 0.9995     # CLOUD MODE: Enable EMA
