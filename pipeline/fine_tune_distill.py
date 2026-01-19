@@ -383,6 +383,9 @@ class FineTuneDistillTrainer:
                 preds_all.extend(torch.argmax(student_logits.detach(), dim=1).cpu().numpy())
                 labels_all.extend(labels.cpu().numpy())
  
+                if step_count % 100 == 0:
+                     torch.cuda.empty_cache()
+
                 if len(epoch_losses) % 10 == 0:
                     LOGGER.info(f"Epoch {epoch} Step [{len(epoch_losses)}/{len(self.train_loader)}] - Loss: {loss_second.item():.4f}")
 

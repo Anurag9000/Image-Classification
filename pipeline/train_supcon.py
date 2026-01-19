@@ -36,21 +36,22 @@ class SupConConfig:
     use_sam: bool = False
     use_lookahead: bool = False
     rho: float = 0.05
-    lookahead_k: int = 5
-    lookahead_alpha: float = 0.5
+    early_stopping_patience: int = 10
+    val_split: float = 0.1
 
 
 class SupConPretrainer:
-    def __init__(self, dataloader: DataLoader, config: Optional[SupConConfig] = None):
+    def __init__(self, train_loader: DataLoader, val_loader: DataLoader = None, config: Optional[SupConConfig] = None):
+        from utils import EarlyStopping
+        
         self.cfg = config or SupConConfig()
-        self.dataloader = dataloader
+        self.train_loader = train_loader
+        self.val_loader = val_loader
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         os.makedirs(os.path.dirname(self.cfg.snapshot_path), exist_ok=True)
 
         self.backbone_cfg = BackboneConfig(**self.cfg.backbone)
         self.model = HybridBackbone(self.backbone_cfg).to(self.device)
-
-        self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
 
         self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
 
@@ -66,8 +67,6 @@ class SupConPretrainer:
              self.optimizer = base_optimizer
              
         # Apply Gradient Centralization
-        # Apply Gradient Centralization
-        # Note: apply_gradient_centralization wraps the OPTIMIZER step, so we pass the optimizer.
         self.optimizer = apply_gradient_centralization(self.optimizer)
 
         if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
@@ -81,13 +80,39 @@ class SupConPretrainer:
         # Fix: torch.cuda.amp.GradScaler -> torch.amp.GradScaler('cuda', ...)
         self.scaler = torch.amp.GradScaler('cuda', enabled=self.cfg.use_amp)
         self.model_ema = ModelEMA(self.model, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
+        
+        self.early_stopper = EarlyStopping(
+            patience=self.cfg.early_stopping_patience, 
+            verbose=True, 
+            path=self.cfg.snapshot_path.replace(".pth", "_best.pth")
+        )
 
         os.makedirs(os.path.dirname(self.cfg.snapshot_path), exist_ok=True)
+
+    def _validate(self) -> float:
+        if not self.val_loader:
+             return 0.0
+        
+        self.model.eval()
+        val_loss = 0.0
+        steps = 0
+        with torch.no_grad():
+             for images, labels in self.val_loader:
+                 images = images.view(-1, 3, self.cfg.image_size, self.cfg.image_size).to(self.device)
+                 expanded_labels = labels.view(-1, 1).repeat(1, self.cfg.num_views).view(-1).to(self.device)
+                 
+                 feats = self.model(images)
+                 loss = self.loss_fn(feats, expanded_labels)
+                 val_loss += loss.item()
+                 steps += 1
+        
+        self.model.train()
+        return val_loss / max(steps, 1)
 
     def train(self):
         self.model.train()
         step = 0
-        data_iter = iter(self.dataloader)
+        data_iter = iter(self.train_loader)
 
         while step < self.cfg.steps:
             if self.cfg.max_steps and step >= self.cfg.max_steps:
@@ -156,12 +181,31 @@ class SupConPretrainer:
             if self.model_ema:
                 self.model_ema.update(self.model)
 
+            if step % 100 == 0:
+                 torch.cuda.empty_cache()
+
             step += 1
             if step % 10 == 0:
                 LOGGER.info("SupCon Step [%d/%d] - Loss: %.4f", step, self.cfg.steps, loss_second.item())
 
-        torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
-        LOGGER.info("SupCon pretraining finished. Final model saved at %s", self.cfg.snapshot_path)
+            # Validation and Early Stopping
+            if self.val_loader and step % len(self.train_loader) == 0:
+                 val_loss = self._validate()
+                 LOGGER.info(f"SupCon Validation Loss: {val_loss:.4f}")
+                 
+                 # Save normal snapshot
+                 torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
+
+                 # Early Stopping check
+                 if self.early_stopper:
+                      self.early_stopper(val_loss, {"model_state_dict": self.model.state_dict()})
+                      if self.early_stopper.early_stop:
+                           LOGGER.info("Early stopping triggered in SupCon Phase!")
+                           break
+
+        if not self.early_stopper or not self.early_stopper.early_stop:
+             torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
+             LOGGER.info("SupCon pretraining finished. Final model saved at %s", self.cfg.snapshot_path)
 
 
 
@@ -221,24 +265,21 @@ def create_supcon_loader(
     # Use the global adapter class (pickleable)
     adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=num_views)
     
-    if json_path:
-        # User explicitly passed json_path. 
-        # root_dir should be the BASE directory where the file_paths in JSON are relative to.
-        # Based on config, 'root' argument holds specific data dirs or "./data".
-        # If 'root' is a list (from config format sometimes), take 1st, but here it is typed as str.
-        # We trust the 'root' param passed in (which comes from cfg.get("data_root", "./data")).
-        # However, run_pipeline passes cfg.get("data_root", "./data").
-        # If JSON paths start with "Dataset_Final_Aug", and root is "./data", that is perfect.
-        # DO NOT use os.path.dirname(json_path) as root_dir, that was the bug causing double path.
-        dataset = JsonDataset(json_path, root_dir=root_dir, transform=adapter) 
-    else:
-        # Fallback to CIFAR if no JSON (unlikely for user)
-        # But user HAS json.
+    if not json_path:
         raise ValueError("SupCon requires json_path for Garbage dataset.")
 
-    # IMPORTANT: Drop Last to avoid irregular batches messing up reshaping? 
-    # Not strictly necessary but safe.
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
+    # Create dataset with MultiView Transform
+    dataset = JsonDataset(json_path, root_dir=root_dir, transform=adapter)
+    
+    # Split into Train/Val
+    val_size = int(len(dataset) * 0.1) # 10% valid
+    train_size = len(dataset) - val_size
+    train_ds, val_ds = torch.utils.data.random_split(dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42))
+    
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True, drop_last=False)
+    
+    return train_loader, val_loader
 
 
 if __name__ == "__main__":

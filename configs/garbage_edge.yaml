@@ -32,6 +32,7 @@ supcon:
   steps: 500
   use_sam: true       # CLOUD MODE: Enable SAM
   use_lookahead: true # CLOUD MODE: Enable Lookahead
+  early_stopping_patience: 10 # Stop if loss stagnates
 
 arcface:
   enabled: true

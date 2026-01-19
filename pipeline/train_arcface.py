@@ -250,6 +250,10 @@ class ArcFaceTrainer:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
+                if step_count % 100 == 0:
+                    LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
+                    torch.cuda.empty_cache()
+
                 # Calculate simple accuracy for monitoring
                 # Calculate simple accuracy for monitoring
                 with torch.no_grad():

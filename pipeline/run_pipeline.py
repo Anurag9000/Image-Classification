@@ -50,7 +50,7 @@ def run_supcon_phase(full_cfg: dict) -> None:
     # Fix: Ensure num_views is consistent between Loader and Trainer
     num_views = cfg.get("num_views", 2)
 
-    loader = create_supcon_loader(
+    loader, val_loader = create_supcon_loader(
         batch_size=cfg.get("batch_size", 16),
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
@@ -64,15 +64,16 @@ def run_supcon_phase(full_cfg: dict) -> None:
         num_views=int(num_views),
         lr=float(cfg.get("lr", 1e-3)),
         steps=int(cfg.get("steps", 200)),
-        ema_decay=float(cfg.get("ema_decay", 0.9995)),
+        ema_decay=float(cfg.get("ema_decay", 0.9995)) if cfg.get("ema_decay", 0.9995) is not None else None,
         backbone=backbone_cfg,
         image_size=int(cfg.get("image_size", 224)),
         augmentations=cfg.get("augmentations", {}),
         num_workers=int(cfg.get("num_workers", 0)),
         max_steps=int(cfg.get("max_steps", 0)) if cfg.get("max_steps") else None,
         snapshot_path=cfg.get("snapshot_path", "./snapshots/supcon_final.pth"),
+        early_stopping_patience=int(cfg.get("early_stopping_patience", 10)),
     )
-    SupConPretrainer(loader, supcon_cfg).train()
+    SupConPretrainer(loader, val_loader, supcon_cfg).train()
 
 
 def run_arcface_phase(cfg: dict) -> None:
@@ -122,7 +123,7 @@ def run_arcface_phase(cfg: dict) -> None:
         mix_method=get_cfg("mix_method", "mixup"),
         use_curricularface=get_cfg("use_curricularface", True),
         use_evidential=get_cfg("use_evidential", False),
-        ema_decay=float(get_cfg("ema_decay", 0.9995)),
+        ema_decay=float(get_cfg("ema_decay", 0.9995)) if get_cfg("ema_decay", 0.9995) is not None else None,
         compile_model=get_cfg("compile", False),
         backbone=get_cfg("backbone", {}),
         image_size=int(get_cfg("image_size", 224)),
@@ -218,7 +219,7 @@ def run_distill_phase(full_cfg: dict) -> None: # Received full config
         lr=float(cfg.get("lr", 5e-6)),
         mix_method=cfg.get("mix_method", "mixup"),
         epochs=int(cfg.get("epochs", 10)),
-        ema_decay=float(cfg.get("ema_decay", 0.9995)),
+        ema_decay=float(cfg.get("ema_decay", 0.9995)) if cfg.get("ema_decay", 0.9995) is not None else None,
         teacher_backbone_path=cfg.get("teacher_backbone_path"),
         teacher_head_path=cfg.get("teacher_head_path"),
         backbone=cfg.get("backbone", {}), # Student config
