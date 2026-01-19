@@ -2,22 +2,22 @@ project_name: "Garbage_Classification_Edge_v1"
 experiment_name: "Distill_ResNetSwin_to_MobileNet"
 
 # Data Config (Shared)
+# Data Config (Shared)
 dataset:
   root_dirs:
     - "d:/Done,Toreview/Image Classification/data"
   json_path: "d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json"
-  batch_size: 32  # Reduced to 32 due to OOM
-  num_workers: 4
+  batch_size: 128 # CLOUD MODE: Large batch for stable gradients
+  num_workers: 8  # Use more cores
   val_split: 0.1
   test_split: 0.1
 
 # -------------------------------------------------------------------------
-# Phase 1 & 2: The TEACHER (Big "Large Ass" Model)
-# These settings control the SupCon & ArcFace training of the Teacher.
+# Phase 1 & 2: The TEACHER (Big "MAX POWER" Model)
 # -------------------------------------------------------------------------
 backbone: 
   cnn_model: "resnet50"
-  vit_model: null # Disabled Swin for significant speedup (Pure ResNet+CBAM is sufficient)
+  vit_model: "swin_base_patch4_window7_224" # CLOUD MODE: Enable Swin Transformer (Hybrid)
   pretrained: true
 embedding_size: 512
 num_classes: 4
@@ -25,20 +25,24 @@ num_classes: 4
 supcon:
   enabled: true
   epochs: 100 
-  batch_size: 32 # Reduced to 32 due to OOM
+  batch_size: 128 # CLOUD MODE
   num_views: 2
-  lr: 1.0e-5 # Set to 1e-5 as requested
-  steps: 100 # Corrected to 100 steps as per user request (Quick run)
-
+  lr: 1.0e-4 # Higher LR for huge batch size
+  steps: 500
+  use_sam: true       # CLOUD MODE: Enable SAM
+  use_lookahead: true # CLOUD MODE: Enable Lookahead
 
 arcface:
   enabled: true
-  epochs: 20
-  lr: 1.0e-5 # Reduced from 1e-4 to stop oscillation (Peak ~1e-4)
+  epochs: 50
+  lr: 1.0e-4 
   snapshot_dir: "./snapshots_teacher"
-  early_stopping_patience: 5
-  use_amp: true # Re-enabled AMP for speed (NaNs fixed via backbone/optimizer)
-  use_curricularface: false # FALSE = Use AdaFace (Better for garbage/noise), TRUE = CurricularFace
+  early_stopping_patience: 10
+  use_amp: true 
+  use_curricularface: false # AdaFace fits garbage best
+  ema_decay: 0.9995   # CLOUD MODE: Enable EMA for smoothness
+  use_sam: true       # CLOUD MODE: Enable SAM
+  use_lookahead: true # CLOUD MODE: Enable Lookahead
 
 # -------------------------------------------------------------------------
 # Phase 3: The STUDENT (Tiny Edge Model)
@@ -65,3 +69,6 @@ distill:
   log_csv: "./logs/distill_edge_metrics.csv"
   snapshot_dir: "./snapshots_edge_student"
   early_stopping_patience: 10
+  use_sam: true         # CLOUD MODE: Enable SAM
+  use_lookahead: true   # CLOUD MODE: Enable Lookahead
+  ema_decay: 0.9995     # CLOUD MODE: Enable EMA
