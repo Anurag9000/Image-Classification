@@ -18,7 +18,7 @@ dataset:
 # Phase 1 & 2: The TEACHER (ResNet50 + AdaFace)
 # -------------------------------------------------------------------------
 backbone: 
-  cnn_model: "resnet50"
+  cnn_model: "resnet18"
   vit_model: null # Disabled for VRAM/Speed
   pretrained: true
 embedding_size: 512

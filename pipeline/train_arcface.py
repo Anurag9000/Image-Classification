@@ -253,6 +253,12 @@ class ArcFaceTrainer:
                         mix_loss = self._apply_manifold_mixup(logits, y_a)
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
+                # Calculate Batch Accuracy (Needed for every step CSV logging)
+                with torch.no_grad():
+                    clean_logits = self.head(features, labels=None) 
+                    preds = torch.argmax(clean_logits, dim=1)
+                    acc = (preds == labels).float().mean() * 100.0
+
                 if step_count % 10 == 0:
                     LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
                     torch.cuda.empty_cache()
@@ -260,12 +266,11 @@ class ArcFaceTrainer:
                     # 1. Frequent Validation Check (Every 10 steps)
                     val_loss_str = "N/A"
                     patience_str = "N/A"
-                    acc_str = "N/A"
+                    acc_str = f"{acc.item():.2f}%"
                     
                     if self.val_loader:
                          v_loss, v_acc, v_f1 = self._validate()
                          val_loss_str = f"{v_loss:.4f}"
-                         acc_str = f"{v_acc*100:.2f}%"
                          
                          # Early Stopping Check
                          if self.early_stopper:
@@ -274,14 +279,14 @@ class ArcFaceTrainer:
                                 'head_state_dict': self.head.state_dict()
                              })
                              patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
-
+                             
                              if self.early_stopper.early_stop:
                                  LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
                                  LOGGER.info("Early stopping triggered in ArcFace Phase!")
                                  break
                     
                     # Combined Log
-                    LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc.item():.2f}% - ValLoss: {val_loss_str} - Patience: {patience_str}")
+                    LOGGER.info(f"Epoch {epoch} Step [{step_count}/{len(self.train_loader)}] - Loss: {loss.item():.4f} - Acc: {acc_str} - ValLoss: {val_loss_str} - Patience: {patience_str}")
                     
                     if acc.item() == 0.0:
                          LOGGER.warning("CRITICAL: Accuracy is EXACTLY 0.0!")

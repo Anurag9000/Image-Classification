@@ -1,0 +1,28 @@
+2026-01-19 19:30:17,204 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-19 19:30:17,219 - INFO - ===> Starting ArcFace Training Phase
+2026-01-19 19:30:17,220 - INFO - Using CombinedFilesDataset with roots: ['./data']
+2026-01-19 19:30:17,227 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-19 19:30:18,627 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:30:18,627 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-19 19:30:19,845 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:30:20,866 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:30:22,055 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:30:22,056 - INFO - Created independent Subsets: Train(494271), Val(61783), Test(61783)
+2026-01-19 19:30:22,573 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-19 19:30:23,038 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet18.a1_in1k)
+2026-01-19 19:30:23,429 - INFO - [timm/resnet18.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-19 19:30:23,582 - INFO - HybridBackbone Dimensions Detected -> CNN: 512, ViT: 0
+2026-01-19 19:30:23,582 - INFO - CBAM initialized with channels: 512
+2026-01-19 19:30:23,746 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-19 19:31:14,642 - ERROR - Phase arcface failed: name 'acc' is not defined
+2026-01-19 19:31:14,644 - ERROR - Traceback (most recent call last):
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 446, in run_pipeline
+    runner()
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 434, in <lambda>
+    "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 143, in run_arcface_phase
+    trainer.train()
+  File "D:\Done,Toreview\Image Classification\pipeline\train_arcface.py", line 302, in train
+    csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
+NameError: name 'acc' is not defined
+
