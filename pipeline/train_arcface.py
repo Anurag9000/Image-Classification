@@ -260,7 +260,7 @@ class ArcFaceTrainer:
                     acc = (preds == labels).float().mean() * 100.0
 
                 if step_count % 100 == 0:
-                    LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
+                    # LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
                     # torch.cuda.empty_cache()
                     
                     # 1. Frequent Validation Check (Every 10 steps)

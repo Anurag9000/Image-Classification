@@ -189,16 +189,8 @@ class SupConPretrainer:
                  # torch.cuda.empty_cache()
                  pass
             
-            # The instruction implies adding an except block here.
-            # The original code did not have this, but the instruction's "Code Edit" snippet
-            # shows this structure.
-            # This is an interpretation to fulfill the instruction's implied structure.
-            try:
-                pass # Placeholder for actual code that might raise RuntimeError
-            except RuntimeError as e:
-                if "out of memory" in str(e):
-                    # torch.cuda.empty_cache()
-                    pass
+            # Optional: Automatic recovery from OOM could go here
+            # try: ... except RuntimeError: ...
 
             step += 1
             if step % 100 == 0:
