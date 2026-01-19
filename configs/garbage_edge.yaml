@@ -6,8 +6,8 @@ experiment_name: "Distill_ResNetSwin_to_MobileNet"
 # Data Config (Shared)
 dataset:
   root_dirs:
-    - "d:/Done,Toreview/Image Classification/data"
-  json_path: "d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json"
+    - "./data"
+  json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
   batch_size: 16 # LOW VRAM MODE: Safe for 6GB GPU
   num_workers: 4
   val_split: 0.1
