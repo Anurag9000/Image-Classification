@@ -1,0 +1,223 @@
+2026-01-18 22:04:40,968 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-18 22:04:40,974 - INFO - ===> Starting SupCon Pretraining Phase
+2026-01-18 22:04:42,006 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-18 22:04:42,416 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
+2026-01-18 22:04:42,719 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-18 22:04:42,988 - INFO - HybridBackbone Dimensions Detected -> CNN: 2048, ViT: 0
+2026-01-18 22:04:42,995 - INFO - CBAM initialized with channels: 2048
+2026-01-18 22:05:22,363 - INFO - SupCon Step [10/100] - Loss: 7.5572
+2026-01-18 22:06:01,866 - INFO - SupCon Step [20/100] - Loss: 7.2348
+2026-01-18 22:06:40,995 - INFO - SupCon Step [30/100] - Loss: 7.1662
+2026-01-18 22:07:18,907 - INFO - SupCon Step [40/100] - Loss: 6.9316
+2026-01-18 22:07:57,750 - INFO - SupCon Step [50/100] - Loss: 7.5841
+2026-01-18 22:08:35,325 - INFO - SupCon Step [60/100] - Loss: 6.9899
+2026-01-18 22:09:10,393 - INFO - SupCon Step [70/100] - Loss: 7.0378
+2026-01-18 22:09:45,507 - INFO - SupCon Step [80/100] - Loss: 7.2369
+2026-01-18 22:10:20,690 - INFO - SupCon Step [90/100] - Loss: 6.5185
+2026-01-18 22:10:56,000 - INFO - SupCon Step [100/100] - Loss: 7.0396
+2026-01-18 22:10:56,292 - INFO - SupCon pretraining finished. Final model saved at ./snapshots/supcon_final.pth
+2026-01-18 22:10:56,729 - INFO - ===> Starting ArcFace Training Phase
+2026-01-18 22:10:56,730 - INFO - Using CombinedFilesDataset with roots: ['d:/Done,Toreview/Image Classification/data']
+2026-01-18 22:10:56,770 - INFO - Creating loader from JSON: d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-18 22:10:58,267 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-18 22:10:58,267 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-18 22:10:59,839 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-18 22:11:01,356 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-18 22:11:02,862 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-18 22:11:02,874 - INFO - Created independent Subsets: Train(494271), Val(61783), Test(61783)
+2026-01-18 22:11:03,396 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-18 22:11:04,075 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
+2026-01-18 22:11:04,492 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-18 22:11:04,756 - INFO - HybridBackbone Dimensions Detected -> CNN: 2048, ViT: 0
+2026-01-18 22:11:04,765 - INFO - CBAM initialized with channels: 2048
+2026-01-18 22:11:04,925 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-18 22:13:27,851 - INFO - Epoch 1 Step [50/7723] - Loss: 30.8535 - Acc: 0.00%
+2026-01-18 22:13:27,854 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:15:05,739 - INFO - Epoch 1 Step [100/7723] - Loss: 24.7157 - Acc: 0.00%
+2026-01-18 22:15:05,739 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:16:42,121 - INFO - Epoch 1 Step [150/7723] - Loss: 12.4247 - Acc: 0.00%
+2026-01-18 22:16:42,121 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:18:55,505 - INFO - Epoch 1 Step [200/7723] - Loss: 26.7116 - Acc: 0.00%
+2026-01-18 22:18:55,506 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:21:35,592 - INFO - Epoch 1 Step [250/7723] - Loss: 29.2326 - Acc: 0.00%
+2026-01-18 22:21:35,592 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:24:04,106 - INFO - Epoch 1 Step [300/7723] - Loss: 8.4838 - Acc: 0.00%
+2026-01-18 22:24:04,108 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 22:26:43,096 - INFO - Epoch 1 Step [350/7723] - Loss: 23.3629 - Acc: 1.56%
+2026-01-18 22:29:23,033 - INFO - Epoch 1 Step [400/7723] - Loss: 6.3553 - Acc: 1.56%
+2026-01-18 22:31:44,239 - INFO - Epoch 1 Step [450/7723] - Loss: 8.6481 - Acc: 3.12%
+2026-01-18 22:34:27,039 - INFO - Epoch 1 Step [500/7723] - Loss: 20.9124 - Acc: 14.06%
+2026-01-18 22:36:55,536 - INFO - Epoch 1 Step [550/7723] - Loss: 21.3759 - Acc: 7.81%
+2026-01-18 22:39:31,543 - INFO - Epoch 1 Step [600/7723] - Loss: 5.9876 - Acc: 4.69%
+2026-01-18 22:42:03,008 - INFO - Epoch 1 Step [650/7723] - Loss: 7.6001 - Acc: 3.12%
+2026-01-18 22:44:31,712 - INFO - Epoch 1 Step [700/7723] - Loss: 21.4597 - Acc: 14.06%
+2026-01-18 22:46:56,019 - INFO - Epoch 1 Step [750/7723] - Loss: 19.0645 - Acc: 6.25%
+2026-01-18 22:49:32,832 - INFO - Epoch 1 Step [800/7723] - Loss: 10.8322 - Acc: 6.25%
+2026-01-18 22:52:05,865 - INFO - Epoch 1 Step [850/7723] - Loss: 20.4450 - Acc: 12.50%
+2026-01-18 22:54:34,957 - INFO - Epoch 1 Step [900/7723] - Loss: 19.0257 - Acc: 15.62%
+2026-01-18 22:57:06,149 - INFO - Epoch 1 Step [950/7723] - Loss: 13.3908 - Acc: 4.69%
+2026-01-18 22:59:35,066 - INFO - Epoch 1 Step [1000/7723] - Loss: 20.6816 - Acc: 9.38%
+2026-01-18 23:02:14,941 - INFO - Epoch 1 Step [1050/7723] - Loss: 6.2291 - Acc: 10.94%
+2026-01-18 23:04:53,351 - INFO - Epoch 1 Step [1100/7723] - Loss: 20.0931 - Acc: 18.75%
+2026-01-18 23:07:18,606 - INFO - Epoch 1 Step [1150/7723] - Loss: 9.0622 - Acc: 6.25%
+2026-01-18 23:09:48,832 - INFO - Epoch 1 Step [1200/7723] - Loss: 5.2645 - Acc: 4.69%
+2026-01-18 23:12:11,479 - INFO - Epoch 1 Step [1250/7723] - Loss: 8.1880 - Acc: 4.69%
+2026-01-18 23:14:39,278 - INFO - Epoch 1 Step [1300/7723] - Loss: 7.2144 - Acc: 1.56%
+2026-01-18 23:17:06,865 - INFO - Epoch 1 Step [1350/7723] - Loss: 18.2898 - Acc: 14.06%
+2026-01-18 23:19:41,887 - INFO - Epoch 1 Step [1400/7723] - Loss: 17.5422 - Acc: 9.38%
+2026-01-18 23:22:04,998 - INFO - Epoch 1 Step [1450/7723] - Loss: 13.7623 - Acc: 4.69%
+2026-01-18 23:24:36,146 - INFO - Epoch 1 Step [1500/7723] - Loss: 20.8003 - Acc: 10.94%
+2026-01-18 23:27:11,831 - INFO - Epoch 1 Step [1550/7723] - Loss: 4.9032 - Acc: 1.56%
+2026-01-18 23:29:52,280 - INFO - Epoch 1 Step [1600/7723] - Loss: 18.0319 - Acc: 0.00%
+2026-01-18 23:29:52,282 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:32:19,522 - INFO - Epoch 1 Step [1650/7723] - Loss: 9.0415 - Acc: 3.12%
+2026-01-18 23:34:44,893 - INFO - Epoch 1 Step [1700/7723] - Loss: 7.3418 - Acc: 0.00%
+2026-01-18 23:34:44,895 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:37:14,028 - INFO - Epoch 1 Step [1750/7723] - Loss: 16.6207 - Acc: 4.69%
+2026-01-18 23:39:52,116 - INFO - Epoch 1 Step [1800/7723] - Loss: 18.5687 - Acc: 3.12%
+2026-01-18 23:42:29,082 - INFO - Epoch 1 Step [1850/7723] - Loss: 18.9756 - Acc: 3.12%
+2026-01-18 23:44:56,397 - INFO - Epoch 1 Step [1900/7723] - Loss: 17.3328 - Acc: 0.00%
+2026-01-18 23:44:56,398 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:47:28,381 - INFO - Epoch 1 Step [1950/7723] - Loss: 14.4839 - Acc: 0.00%
+2026-01-18 23:47:28,383 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:50:01,917 - INFO - Epoch 1 Step [2000/7723] - Loss: 12.0369 - Acc: 0.00%
+2026-01-18 23:50:01,918 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:52:30,062 - INFO - Epoch 1 Step [2050/7723] - Loss: 19.4162 - Acc: 4.69%
+2026-01-18 23:55:03,227 - INFO - Epoch 1 Step [2100/7723] - Loss: 21.7423 - Acc: 0.00%
+2026-01-18 23:55:03,228 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-18 23:57:33,799 - INFO - Epoch 1 Step [2150/7723] - Loss: 2.9564 - Acc: 1.56%
+2026-01-19 00:00:07,997 - INFO - Epoch 1 Step [2200/7723] - Loss: 18.8131 - Acc: 0.00%
+2026-01-19 00:00:08,000 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:02:51,322 - INFO - Epoch 1 Step [2250/7723] - Loss: 20.0462 - Acc: 0.00%
+2026-01-19 00:02:51,324 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:05:23,310 - INFO - Epoch 1 Step [2300/7723] - Loss: 22.5157 - Acc: 0.00%
+2026-01-19 00:05:23,313 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:07:50,906 - INFO - Epoch 1 Step [2350/7723] - Loss: 15.3210 - Acc: 0.00%
+2026-01-19 00:07:50,909 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:10:25,669 - INFO - Epoch 1 Step [2400/7723] - Loss: 7.1250 - Acc: 1.56%
+2026-01-19 00:13:13,726 - INFO - Epoch 1 Step [2450/7723] - Loss: 4.1919 - Acc: 0.00%
+2026-01-19 00:13:13,728 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:16:11,528 - INFO - Epoch 1 Step [2500/7723] - Loss: 23.3002 - Acc: 0.00%
+2026-01-19 00:16:11,531 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:18:46,987 - INFO - Epoch 1 Step [2550/7723] - Loss: 20.4186 - Acc: 0.00%
+2026-01-19 00:18:46,989 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:21:23,903 - INFO - Epoch 1 Step [2600/7723] - Loss: 17.7009 - Acc: 0.00%
+2026-01-19 00:21:23,905 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:24:03,786 - INFO - Epoch 1 Step [2650/7723] - Loss: 16.5963 - Acc: 0.00%
+2026-01-19 00:24:03,789 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:26:35,833 - INFO - Epoch 1 Step [2700/7723] - Loss: 9.6872 - Acc: 0.00%
+2026-01-19 00:26:35,834 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:29:10,913 - INFO - Epoch 1 Step [2750/7723] - Loss: 15.7587 - Acc: 0.00%
+2026-01-19 00:29:10,916 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:31:52,864 - INFO - Epoch 1 Step [2800/7723] - Loss: 7.8182 - Acc: 0.00%
+2026-01-19 00:31:52,867 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:34:31,688 - INFO - Epoch 1 Step [2850/7723] - Loss: 15.1491 - Acc: 0.00%
+2026-01-19 00:34:31,691 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:37:05,432 - INFO - Epoch 1 Step [2900/7723] - Loss: 6.7952 - Acc: 0.00%
+2026-01-19 00:37:05,434 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:39:34,907 - INFO - Epoch 1 Step [2950/7723] - Loss: 16.3509 - Acc: 0.00%
+2026-01-19 00:39:34,908 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:42:28,464 - INFO - Epoch 1 Step [3000/7723] - Loss: 5.9868 - Acc: 0.00%
+2026-01-19 00:42:28,467 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:45:03,875 - INFO - Epoch 1 Step [3050/7723] - Loss: 9.5196 - Acc: 0.00%
+2026-01-19 00:45:03,879 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:47:46,094 - INFO - Epoch 1 Step [3100/7723] - Loss: 19.1831 - Acc: 1.56%
+2026-01-19 00:50:26,516 - INFO - Epoch 1 Step [3150/7723] - Loss: 18.1134 - Acc: 0.00%
+2026-01-19 00:50:26,520 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:53:10,429 - INFO - Epoch 1 Step [3200/7723] - Loss: 21.5079 - Acc: 0.00%
+2026-01-19 00:53:10,429 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:55:40,647 - INFO - Epoch 1 Step [3250/7723] - Loss: 20.6269 - Acc: 0.00%
+2026-01-19 00:55:40,647 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 00:58:20,180 - INFO - Epoch 1 Step [3300/7723] - Loss: 8.1786 - Acc: 0.00%
+2026-01-19 00:58:20,185 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:01:04,662 - INFO - Epoch 1 Step [3350/7723] - Loss: 22.6767 - Acc: 1.56%
+2026-01-19 01:03:47,212 - INFO - Epoch 1 Step [3400/7723] - Loss: 19.9178 - Acc: 0.00%
+2026-01-19 01:03:47,236 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:06:26,371 - INFO - Epoch 1 Step [3450/7723] - Loss: 22.8720 - Acc: 3.12%
+2026-01-19 01:09:23,755 - INFO - Epoch 1 Step [3500/7723] - Loss: 19.6541 - Acc: 3.12%
+2026-01-19 01:12:03,205 - INFO - Epoch 1 Step [3550/7723] - Loss: 21.9657 - Acc: 3.12%
+2026-01-19 01:14:45,044 - INFO - Epoch 1 Step [3600/7723] - Loss: 14.6716 - Acc: 0.00%
+2026-01-19 01:14:45,050 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:17:32,292 - INFO - Epoch 1 Step [3650/7723] - Loss: 18.0616 - Acc: 1.56%
+2026-01-19 01:20:09,777 - INFO - Epoch 1 Step [3700/7723] - Loss: 12.8716 - Acc: 0.00%
+2026-01-19 01:20:09,780 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:22:53,799 - INFO - Epoch 1 Step [3750/7723] - Loss: 8.9677 - Acc: 0.00%
+2026-01-19 01:22:53,804 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:25:43,672 - INFO - Epoch 1 Step [3800/7723] - Loss: 6.9703 - Acc: 0.00%
+2026-01-19 01:25:43,681 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:28:20,874 - INFO - Epoch 1 Step [3850/7723] - Loss: 6.8090 - Acc: 0.00%
+2026-01-19 01:28:20,878 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:31:01,522 - INFO - Epoch 1 Step [3900/7723] - Loss: 5.8164 - Acc: 1.56%
+2026-01-19 01:33:44,639 - INFO - Epoch 1 Step [3950/7723] - Loss: 20.2536 - Acc: 0.00%
+2026-01-19 01:33:44,644 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:36:38,327 - INFO - Epoch 1 Step [4000/7723] - Loss: 7.0119 - Acc: 0.00%
+2026-01-19 01:36:38,332 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:39:33,879 - INFO - Epoch 1 Step [4050/7723] - Loss: 14.3865 - Acc: 0.00%
+2026-01-19 01:39:33,884 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:42:09,968 - INFO - Epoch 1 Step [4100/7723] - Loss: 4.5863 - Acc: 0.00%
+2026-01-19 01:42:09,972 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:45:20,015 - INFO - Epoch 1 Step [4150/7723] - Loss: 10.0508 - Acc: 0.00%
+2026-01-19 01:45:20,021 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:48:00,070 - INFO - Epoch 1 Step [4200/7723] - Loss: 18.8473 - Acc: 0.00%
+2026-01-19 01:48:00,077 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:50:46,206 - INFO - Epoch 1 Step [4250/7723] - Loss: 7.7232 - Acc: 0.00%
+2026-01-19 01:50:46,215 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:53:37,463 - INFO - Epoch 1 Step [4300/7723] - Loss: 5.1010 - Acc: 1.56%
+2026-01-19 01:56:39,817 - INFO - Epoch 1 Step [4350/7723] - Loss: 18.4271 - Acc: 0.00%
+2026-01-19 01:56:39,821 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 01:59:42,851 - INFO - Epoch 1 Step [4400/7723] - Loss: 24.1241 - Acc: 1.56%
+2026-01-19 02:02:30,472 - INFO - Epoch 1 Step [4450/7723] - Loss: 6.1280 - Acc: 0.00%
+2026-01-19 02:02:30,478 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:05:33,428 - INFO - Epoch 1 Step [4500/7723] - Loss: 13.6858 - Acc: 0.00%
+2026-01-19 02:05:33,435 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:08:23,873 - INFO - Epoch 1 Step [4550/7723] - Loss: 11.1860 - Acc: 0.00%
+2026-01-19 02:08:23,878 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:11:14,816 - INFO - Epoch 1 Step [4600/7723] - Loss: 19.6364 - Acc: 0.00%
+2026-01-19 02:11:14,820 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:14:09,404 - INFO - Epoch 1 Step [4650/7723] - Loss: 6.7992 - Acc: 1.56%
+2026-01-19 02:16:57,802 - INFO - Epoch 1 Step [4700/7723] - Loss: 6.5568 - Acc: 0.00%
+2026-01-19 02:16:57,808 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:20:05,217 - INFO - Epoch 1 Step [4750/7723] - Loss: 8.1170 - Acc: 0.00%
+2026-01-19 02:20:05,233 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:23:04,317 - INFO - Epoch 1 Step [4800/7723] - Loss: 4.1848 - Acc: 0.00%
+2026-01-19 02:23:04,322 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:26:18,871 - INFO - Epoch 1 Step [4850/7723] - Loss: 10.5222 - Acc: 0.00%
+2026-01-19 02:26:18,886 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:29:04,408 - INFO - Epoch 1 Step [4900/7723] - Loss: 18.2406 - Acc: 1.56%
+2026-01-19 02:32:13,956 - INFO - Epoch 1 Step [4950/7723] - Loss: 20.2249 - Acc: 3.12%
+2026-01-19 02:35:05,086 - INFO - Epoch 1 Step [5000/7723] - Loss: 12.4499 - Acc: 1.56%
+2026-01-19 02:38:18,255 - INFO - Epoch 1 Step [5050/7723] - Loss: 5.2895 - Acc: 3.12%
+2026-01-19 02:41:19,244 - INFO - Epoch 1 Step [5100/7723] - Loss: 18.2254 - Acc: 1.56%
+2026-01-19 02:44:23,326 - INFO - Epoch 1 Step [5150/7723] - Loss: 30.0689 - Acc: 0.00%
+2026-01-19 02:44:23,333 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:47:32,554 - INFO - Epoch 1 Step [5200/7723] - Loss: 21.6907 - Acc: 7.81%
+2026-01-19 02:50:48,158 - INFO - Epoch 1 Step [5250/7723] - Loss: 5.3734 - Acc: 1.56%
+2026-01-19 02:54:08,891 - INFO - Epoch 1 Step [5300/7723] - Loss: 8.2130 - Acc: 0.00%
+2026-01-19 02:54:08,900 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-19 02:57:09,780 - INFO - Epoch 1 Step [5350/7723] - Loss: 7.1503 - Acc: 3.12%
+2026-01-19 02:59:58,009 - ERROR - Phase arcface failed: CUDA error: out of memory
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+2026-01-19 02:59:58,049 - ERROR - Traceback (most recent call last):
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 443, in run_pipeline
+    runner()
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 431, in <lambda>
+    "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 141, in run_arcface_phase
+    trainer.train()
+  File "D:\Done,Toreview\Image Classification\pipeline\train_arcface.py", line 291, in train
+    self.scaler.scale(loss).backward()
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python310\lib\site-packages\torch\_tensor.py", line 626, in backward
+    torch.autograd.backward(
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python310\lib\site-packages\torch\autograd\__init__.py", line 347, in backward
+    _engine_run_backward(
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python310\lib\site-packages\torch\autograd\graph.py", line 823, in _engine_run_backward
+    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass
+RuntimeError: CUDA error: out of memory
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+
+

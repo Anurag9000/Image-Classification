@@ -26,6 +26,4 @@ __pycache__/
 # Model Checkpoints and Logs
 snapshots/
 *.pth
-logs/
-*.log
 *.txt

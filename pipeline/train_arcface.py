@@ -251,8 +251,12 @@ class ArcFaceTrainer:
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
                 # Calculate simple accuracy for monitoring
+                # Calculate simple accuracy for monitoring
                 with torch.no_grad():
-                    preds = torch.argmax(logits, dim=1)
+                    # ACCURACY MUST BE CALCULATED ON CLEAN LOGITS (No Margins)
+                    # AdaFace/ArcFace margins penalize the target class, often making it the MINIMUM score initially.
+                    clean_logits = self.head(features, labels=None) 
+                    preds = torch.argmax(clean_logits, dim=1)
                     acc = (preds == labels).float().mean() * 100.0
                     
                 # Optimization Step
