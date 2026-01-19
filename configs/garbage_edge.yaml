@@ -32,14 +32,14 @@ supcon:
   steps: 500
   use_sam: true       # CLOUD MODE: Enable SAM
   use_lookahead: true # CLOUD MODE: Enable Lookahead
-  early_stopping_patience: 50 # Increased to 50
+  early_stopping_patience: 10 # Stop if loss stagnates
 
 arcface:
   enabled: true
   epochs: 50
   lr: 1.0e-4 
   snapshot_dir: "./snapshots_teacher"
-  early_stopping_patience: 50 # Increased to 50
+  early_stopping_patience: 10
   use_amp: true 
   use_curricularface: false # AdaFace fits garbage best
   ema_decay: 0.9995   # CLOUD MODE: Enable EMA for smoothness
@@ -57,22 +57,21 @@ distill:
   mix_method: "mixup"
   use_manifold_mixup: false
   temperature: 3.0    # Softer probability distribution for better transfer
-  
+
   # Path to the Teacher we just trained (Pipeline defaults to this, but explicit is good)
   teacher_backbone_path: "./snapshots_teacher/best_model.pth"
   # We don't necessarily need the teacher head if using feature distillation, but for logits we do.
   # The code relies on finding the matching head for the backbone.
-  
+
   # DEFINITION OF THE STUDENT (Raspberry Pi Friendly!)
   backbone:
     cnn_model: "mobilenetv3_large_100" # fast, lightweight
     vit_model: null                    # No transformer for edge speed
     pretrained: true
     fusion_dim: 1280                   # MobileNet output dim (auto-handled usually, but good to note)
-  
+
   log_csv: "./logs/distill_edge_metrics.csv"
   snapshot_dir: "./snapshots_edge_student"
-  early_stopping_patience: 50 # Increased to 50
+  early_stopping_patience: 10
   use_sam: true         # CLOUD MODE: Enable SAM
   use_lookahead: true   # CLOUD MODE: Enable Lookahead
-  ema_decay: 0.9995     # CLOUD MODE: Enable EMA
