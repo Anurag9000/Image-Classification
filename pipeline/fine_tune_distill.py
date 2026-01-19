@@ -448,6 +448,7 @@ def create_distill_loader(
     num_workers: int = 4,
     val_split: float = 0.1,
     json_path: Optional[str] = None,
+    augment_online: bool = True
 ) -> tuple[DataLoader, Optional[DataLoader]]:
     from .files_dataset import create_garbage_loader
     
@@ -462,6 +463,7 @@ def create_distill_loader(
         val_split=val_split,
         test_split=0.0,
         json_path=json_path,
+        augment_online=augment_online,
     )
 
     return train_loader, val_loader

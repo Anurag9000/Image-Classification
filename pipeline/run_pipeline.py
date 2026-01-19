@@ -86,7 +86,8 @@ def run_arcface_phase(cfg: dict) -> None:
             num_workers=cfg["dataset"].get("num_workers", 4),
             val_split=cfg["dataset"].get("val_split", 0.0),
             test_split=cfg["dataset"].get("test_split", 0.0), # Add test split
-            json_path=cfg["dataset"].get("json_path", None)
+            json_path=cfg["dataset"].get("json_path", None),
+            augment_online=cfg["dataset"].get("augment_online", True)
         )
     else:
         # Legacy/Standard Loader (updates might be needed if this path is used, but for now keep as is or unpack)
@@ -209,6 +210,7 @@ def run_distill_phase(full_cfg: dict) -> None: # Received full config
         num_workers=int(cfg.get("num_workers", 0)),
         val_split=float(cfg.get("val_split", 0.1)),
         json_path=json_path,
+        augment_online=full_cfg.get("dataset", {}).get("augment_online", True),
     )
     distill_cfg = DistillConfig(
         num_classes=int(cfg.get("num_classes", 100)),

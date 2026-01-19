@@ -157,14 +157,16 @@ def create_garbage_loader(
     num_workers: int = 2, 
     val_split: float = 0.0,
     test_split: float = 0.0,
-    json_path: str = None
+    json_path: str = None,
+    augment_online: bool = True
 ):
     """
     Creates train/val/test loaders.
     If json_path is provided, uses JsonDataset (single large dataset, split optional).
     Otherwise uses CombinedFilesDataset (folder structure with CSVs).
     """
-    train_transform = get_garbage_transforms(is_training=True)
+    # If augment_online is False, use VALIDATION transforms (Resize+Norm) for training too.
+    train_transform = get_garbage_transforms(is_training=augment_online)
     val_transform = get_garbage_transforms(is_training=False)
     
     test_loader = None

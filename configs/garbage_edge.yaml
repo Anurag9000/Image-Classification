@@ -11,6 +11,7 @@ dataset:
   num_workers: 8  # Use more cores
   val_split: 0.1
   test_split: 0.1
+  augment_online: false # CLOUD MODE: User has pre-augmented data, disable online augs
 
 # -------------------------------------------------------------------------
 # Phase 1 & 2: The TEACHER (Big "MAX POWER" Model)
@@ -52,6 +53,8 @@ distill:
   enabled: true
   epochs: 30
   distill_weight: 0.5 # 50% learn from Teacher, 50% learn from Hard Labels
+  mix_method: "mixup"
+  use_manifold_mixup: false
   temperature: 3.0    # Softer probability distribution for better transfer
   
   # Path to the Teacher we just trained (Pipeline defaults to this, but explicit is good)
