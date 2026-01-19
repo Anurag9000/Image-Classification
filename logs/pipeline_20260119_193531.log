@@ -1,2 +1,153 @@
 2026-01-19 19:35:31,581 - INFO - Loading config from: configs/garbage_edge.yaml
 2026-01-19 19:35:31,590 - INFO - ===> Starting SupCon Pretraining Phase
+2026-01-19 19:35:32,990 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:35:33,304 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet18.a1_in1k)
+2026-01-19 19:35:33,691 - INFO - [timm/resnet18.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-19 19:35:33,850 - INFO - HybridBackbone Dimensions Detected -> CNN: 512, ViT: 0
+2026-01-19 19:35:33,851 - INFO - CBAM initialized with channels: 512
+2026-01-19 19:35:51,069 - INFO - Validation loss decreased (inf --> 5.461470).  Saving model ...
+2026-01-19 19:35:51,169 - INFO - SupCon Step [10/500000] - Loss: 4.7702 - ValLoss: 5.4615 - Patience: 0/10
+2026-01-19 19:36:05,043 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:36:05,044 - INFO - SupCon Step [20/500000] - Loss: 4.7143 - ValLoss: 5.9974 - Patience: 1/10
+2026-01-19 19:36:19,370 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:36:19,371 - INFO - SupCon Step [30/500000] - Loss: 5.3840 - ValLoss: 6.0097 - Patience: 2/10
+2026-01-19 19:36:35,131 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:36:35,132 - INFO - SupCon Step [40/500000] - Loss: 6.5368 - ValLoss: 5.9566 - Patience: 3/10
+2026-01-19 19:36:51,639 - INFO - EarlyStopping counter: 4 out of 10
+2026-01-19 19:36:51,642 - INFO - SupCon Step [50/500000] - Loss: 4.7177 - ValLoss: 6.0597 - Patience: 4/10
+2026-01-19 19:37:09,286 - INFO - EarlyStopping counter: 5 out of 10
+2026-01-19 19:37:09,287 - INFO - SupCon Step [60/500000] - Loss: 4.7311 - ValLoss: 5.9170 - Patience: 5/10
+2026-01-19 19:37:26,301 - INFO - EarlyStopping counter: 6 out of 10
+2026-01-19 19:37:26,302 - INFO - SupCon Step [70/500000] - Loss: 5.1170 - ValLoss: 5.8659 - Patience: 6/10
+2026-01-19 19:37:39,814 - INFO - EarlyStopping counter: 7 out of 10
+2026-01-19 19:37:39,814 - INFO - SupCon Step [80/500000] - Loss: 4.1686 - ValLoss: 5.7415 - Patience: 7/10
+2026-01-19 19:37:54,839 - INFO - EarlyStopping counter: 8 out of 10
+2026-01-19 19:37:54,841 - INFO - SupCon Step [90/500000] - Loss: 5.4519 - ValLoss: 5.6160 - Patience: 8/10
+2026-01-19 19:38:08,876 - INFO - Validation loss decreased (5.461470 --> 5.431344).  Saving model ...
+2026-01-19 19:38:08,970 - INFO - SupCon Step [100/500000] - Loss: 4.9106 - ValLoss: 5.4313 - Patience: 0/10
+2026-01-19 19:38:22,653 - INFO - Validation loss decreased (5.431344 --> 5.415783).  Saving model ...
+2026-01-19 19:38:22,766 - INFO - SupCon Step [110/500000] - Loss: 5.3822 - ValLoss: 5.4158 - Patience: 0/10
+2026-01-19 19:38:36,267 - INFO - Validation loss decreased (5.415783 --> 5.387652).  Saving model ...
+2026-01-19 19:38:36,375 - INFO - SupCon Step [120/500000] - Loss: 5.1369 - ValLoss: 5.3877 - Patience: 0/10
+2026-01-19 19:38:48,935 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:38:48,935 - INFO - SupCon Step [130/500000] - Loss: 4.9132 - ValLoss: 5.4134 - Patience: 1/10
+2026-01-19 19:39:02,110 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:39:02,110 - INFO - SupCon Step [140/500000] - Loss: 6.0933 - ValLoss: 5.4215 - Patience: 2/10
+2026-01-19 19:39:15,731 - INFO - Validation loss decreased (5.387652 --> 5.287382).  Saving model ...
+2026-01-19 19:39:15,841 - INFO - SupCon Step [150/500000] - Loss: 4.5181 - ValLoss: 5.2874 - Patience: 0/10
+2026-01-19 19:39:29,499 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:39:29,500 - INFO - SupCon Step [160/500000] - Loss: 3.9956 - ValLoss: 5.3268 - Patience: 1/10
+2026-01-19 19:39:43,347 - INFO - Validation loss decreased (5.287382 --> 5.186378).  Saving model ...
+2026-01-19 19:39:43,465 - INFO - SupCon Step [170/500000] - Loss: 4.1663 - ValLoss: 5.1864 - Patience: 0/10
+2026-01-19 19:39:56,412 - INFO - Validation loss decreased (5.186378 --> 5.151326).  Saving model ...
+2026-01-19 19:39:56,512 - INFO - SupCon Step [180/500000] - Loss: 5.5514 - ValLoss: 5.1513 - Patience: 0/10
+2026-01-19 19:40:09,289 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:40:09,290 - INFO - SupCon Step [190/500000] - Loss: 5.9302 - ValLoss: 5.4745 - Patience: 1/10
+2026-01-19 19:40:25,346 - INFO - Validation loss decreased (5.151326 --> 5.100710).  Saving model ...
+2026-01-19 19:40:25,459 - INFO - SupCon Step [200/500000] - Loss: 5.6646 - ValLoss: 5.1007 - Patience: 0/10
+2026-01-19 19:40:43,158 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:40:43,159 - INFO - SupCon Step [210/500000] - Loss: 5.6845 - ValLoss: 5.1315 - Patience: 1/10
+2026-01-19 19:41:01,336 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:41:01,336 - INFO - SupCon Step [220/500000] - Loss: 4.5165 - ValLoss: 5.1482 - Patience: 2/10
+2026-01-19 19:41:14,338 - INFO - Validation loss decreased (5.100710 --> 5.087044).  Saving model ...
+2026-01-19 19:41:14,432 - INFO - SupCon Step [230/500000] - Loss: 4.7741 - ValLoss: 5.0870 - Patience: 0/10
+2026-01-19 19:41:27,542 - INFO - Validation loss decreased (5.087044 --> 5.045628).  Saving model ...
+2026-01-19 19:41:27,648 - INFO - SupCon Step [240/500000] - Loss: 4.0809 - ValLoss: 5.0456 - Patience: 0/10
+2026-01-19 19:41:39,767 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:41:39,768 - INFO - SupCon Step [250/500000] - Loss: 3.5372 - ValLoss: 5.0644 - Patience: 1/10
+2026-01-19 19:41:53,390 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:41:53,391 - INFO - SupCon Step [260/500000] - Loss: 4.4747 - ValLoss: 5.1845 - Patience: 2/10
+2026-01-19 19:42:07,187 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:42:07,188 - INFO - SupCon Step [270/500000] - Loss: 5.7600 - ValLoss: 5.0907 - Patience: 3/10
+2026-01-19 19:42:20,919 - INFO - Validation loss decreased (5.045628 --> 4.990920).  Saving model ...
+2026-01-19 19:42:21,025 - INFO - SupCon Step [280/500000] - Loss: 5.0937 - ValLoss: 4.9909 - Patience: 0/10
+2026-01-19 19:42:34,301 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:42:34,303 - INFO - SupCon Step [290/500000] - Loss: 5.3087 - ValLoss: 5.3272 - Patience: 1/10
+2026-01-19 19:42:47,608 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:42:47,609 - INFO - SupCon Step [300/500000] - Loss: 4.0529 - ValLoss: 5.0192 - Patience: 2/10
+2026-01-19 19:43:01,438 - INFO - Validation loss decreased (4.990920 --> 4.859946).  Saving model ...
+2026-01-19 19:43:01,530 - INFO - SupCon Step [310/500000] - Loss: 3.6667 - ValLoss: 4.8599 - Patience: 0/10
+2026-01-19 19:43:15,086 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:43:15,087 - INFO - SupCon Step [320/500000] - Loss: 5.2022 - ValLoss: 4.9893 - Patience: 1/10
+2026-01-19 19:43:28,475 - INFO - Validation loss decreased (4.859946 --> 4.819403).  Saving model ...
+2026-01-19 19:43:28,590 - INFO - SupCon Step [330/500000] - Loss: 4.2246 - ValLoss: 4.8194 - Patience: 0/10
+2026-01-19 19:43:41,511 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:43:41,512 - INFO - SupCon Step [340/500000] - Loss: 3.3407 - ValLoss: 4.8947 - Patience: 1/10
+2026-01-19 19:43:59,211 - INFO - Validation loss decreased (4.819403 --> 4.668909).  Saving model ...
+2026-01-19 19:43:59,330 - INFO - SupCon Step [350/500000] - Loss: 4.3307 - ValLoss: 4.6689 - Patience: 0/10
+2026-01-19 19:44:15,260 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:44:15,261 - INFO - SupCon Step [360/500000] - Loss: 4.5967 - ValLoss: 4.7573 - Patience: 1/10
+2026-01-19 19:44:29,515 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:44:29,516 - INFO - SupCon Step [370/500000] - Loss: 3.3371 - ValLoss: 4.9249 - Patience: 2/10
+2026-01-19 19:44:43,477 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:44:43,478 - INFO - SupCon Step [380/500000] - Loss: 3.9308 - ValLoss: 4.9231 - Patience: 3/10
+2026-01-19 19:44:57,314 - INFO - EarlyStopping counter: 4 out of 10
+2026-01-19 19:44:57,315 - INFO - SupCon Step [390/500000] - Loss: 4.2946 - ValLoss: 4.9385 - Patience: 4/10
+2026-01-19 19:45:11,394 - INFO - EarlyStopping counter: 5 out of 10
+2026-01-19 19:45:11,396 - INFO - SupCon Step [400/500000] - Loss: 4.3586 - ValLoss: 4.8716 - Patience: 5/10
+2026-01-19 19:45:25,523 - INFO - Validation loss decreased (4.668909 --> 4.469566).  Saving model ...
+2026-01-19 19:45:25,640 - INFO - SupCon Step [410/500000] - Loss: 5.9924 - ValLoss: 4.4696 - Patience: 0/10
+2026-01-19 19:45:39,441 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:45:39,441 - INFO - SupCon Step [420/500000] - Loss: 3.7365 - ValLoss: 4.8434 - Patience: 1/10
+2026-01-19 19:45:52,938 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:45:52,938 - INFO - SupCon Step [430/500000] - Loss: 3.1929 - ValLoss: 4.5591 - Patience: 2/10
+2026-01-19 19:46:06,491 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:46:06,492 - INFO - SupCon Step [440/500000] - Loss: 4.5023 - ValLoss: 4.6122 - Patience: 3/10
+2026-01-19 19:46:20,209 - INFO - EarlyStopping counter: 4 out of 10
+2026-01-19 19:46:20,210 - INFO - SupCon Step [450/500000] - Loss: 5.4994 - ValLoss: 4.7922 - Patience: 4/10
+2026-01-19 19:46:34,077 - INFO - EarlyStopping counter: 5 out of 10
+2026-01-19 19:46:34,079 - INFO - SupCon Step [460/500000] - Loss: 4.3501 - ValLoss: 4.7050 - Patience: 5/10
+2026-01-19 19:46:48,132 - INFO - EarlyStopping counter: 6 out of 10
+2026-01-19 19:46:48,133 - INFO - SupCon Step [470/500000] - Loss: 4.6934 - ValLoss: 4.9132 - Patience: 6/10
+2026-01-19 19:47:00,704 - INFO - EarlyStopping counter: 7 out of 10
+2026-01-19 19:47:00,704 - INFO - SupCon Step [480/500000] - Loss: 5.5172 - ValLoss: 4.5993 - Patience: 7/10
+2026-01-19 19:47:13,720 - INFO - EarlyStopping counter: 8 out of 10
+2026-01-19 19:47:13,721 - INFO - SupCon Step [490/500000] - Loss: 5.1571 - ValLoss: 4.5883 - Patience: 8/10
+2026-01-19 19:47:28,286 - INFO - Validation loss decreased (4.469566 --> 4.378874).  Saving model ...
+2026-01-19 19:47:28,379 - INFO - SupCon Step [500/500000] - Loss: 3.3699 - ValLoss: 4.3789 - Patience: 0/10
+2026-01-19 19:47:44,283 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 19:47:44,284 - INFO - SupCon Step [510/500000] - Loss: 3.3528 - ValLoss: 4.4918 - Patience: 1/10
+2026-01-19 19:48:00,828 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:48:00,829 - INFO - SupCon Step [520/500000] - Loss: 4.7274 - ValLoss: 4.5963 - Patience: 2/10
+2026-01-19 19:48:18,125 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:48:18,125 - INFO - SupCon Step [530/500000] - Loss: 3.5020 - ValLoss: 4.4619 - Patience: 3/10
+2026-01-19 19:48:35,439 - INFO - EarlyStopping counter: 4 out of 10
+2026-01-19 19:48:35,439 - INFO - SupCon Step [540/500000] - Loss: 2.9817 - ValLoss: 4.5175 - Patience: 4/10
+2026-01-19 19:48:52,686 - INFO - EarlyStopping counter: 5 out of 10
+2026-01-19 19:48:52,688 - INFO - SupCon Step [550/500000] - Loss: 3.4056 - ValLoss: 4.3921 - Patience: 5/10
+2026-01-19 19:49:09,424 - INFO - EarlyStopping counter: 6 out of 10
+2026-01-19 19:49:09,424 - INFO - SupCon Step [560/500000] - Loss: 4.8123 - ValLoss: 4.5355 - Patience: 6/10
+2026-01-19 19:49:25,430 - INFO - EarlyStopping counter: 7 out of 10
+2026-01-19 19:49:25,430 - INFO - SupCon Step [570/500000] - Loss: 4.3624 - ValLoss: 4.3978 - Patience: 7/10
+2026-01-19 19:49:41,473 - INFO - EarlyStopping counter: 8 out of 10
+2026-01-19 19:49:41,473 - INFO - SupCon Step [580/500000] - Loss: 3.9992 - ValLoss: 4.6633 - Patience: 8/10
+2026-01-19 19:49:57,133 - INFO - EarlyStopping counter: 9 out of 10
+2026-01-19 19:49:57,135 - INFO - SupCon Step [590/500000] - Loss: 4.5102 - ValLoss: 4.6512 - Patience: 9/10
+2026-01-19 19:50:10,568 - INFO - EarlyStopping counter: 10 out of 10
+2026-01-19 19:50:10,569 - INFO - SupCon Step [600/500000] - Loss: 3.9624 - ValLoss: 4.4919 - Patience: 10/10 [STOP TRIGGERED]
+2026-01-19 19:50:10,569 - INFO - Early stopping triggered in SupCon Phase!
+2026-01-19 19:50:10,975 - INFO - ===> Starting ArcFace Training Phase
+2026-01-19 19:50:10,977 - INFO - Using CombinedFilesDataset with roots: ['./data']
+2026-01-19 19:50:10,988 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-19 19:50:12,081 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:50:12,081 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-19 19:50:13,286 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:50:14,395 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:50:15,478 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:50:15,479 - INFO - Created independent Subsets: Train(494271), Val(61783), Test(61783)
+2026-01-19 19:50:15,982 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-19 19:50:16,345 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet18.a1_in1k)
+2026-01-19 19:50:16,679 - INFO - [timm/resnet18.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-19 19:50:16,835 - INFO - HybridBackbone Dimensions Detected -> CNN: 512, ViT: 0
+2026-01-19 19:50:16,837 - INFO - CBAM initialized with channels: 512
+2026-01-19 19:50:16,882 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-19 19:51:05,614 - INFO - Step 10: Flushing GPU Memory to prevent fragmentation...
+2026-01-19 19:52:09,369 - INFO - Validation loss decreased (inf --> 25.217194).  Saving model ...
+2026-01-19 19:52:09,465 - INFO - Epoch 1 Step [10/30892] - Loss: 10.6050 - Acc: 31.25% - ValLoss: 25.2172 - Patience: 0/10
+2026-01-19 19:52:12,785 - INFO - Step 20: Flushing GPU Memory to prevent fragmentation...
+2026-01-19 19:53:12,328 - INFO - Validation loss decreased (25.217194 --> 23.772569).  Saving model ...
+2026-01-19 19:53:12,413 - INFO - Epoch 1 Step [20/30892] - Loss: 36.5758 - Acc: 12.50% - ValLoss: 23.7726 - Patience: 0/10
+2026-01-19 19:53:14,965 - INFO - Step 30: Flushing GPU Memory to prevent fragmentation...
+2026-01-19 19:54:08,621 - INFO - Validation loss decreased (23.772569 --> 22.121149).  Saving model ...
+2026-01-19 19:54:08,721 - INFO - Epoch 1 Step [30/30892] - Loss: 43.5567 - Acc: 12.50% - ValLoss: 22.1211 - Patience: 0/10
+2026-01-19 19:54:10,686 - INFO - Step 40: Flushing GPU Memory to prevent fragmentation...
