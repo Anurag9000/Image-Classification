@@ -96,8 +96,12 @@ class SupConPretrainer:
         self.model.eval()
         val_loss = 0.0
         steps = 0
+        limit_batches = 20 # Optimization: Reduced to 20 for faster feedback
+        
         with torch.no_grad():
-             for images, labels in self.val_loader:
+             for i, (images, labels) in enumerate(self.val_loader):
+                 if i >= limit_batches:
+                     break
                  images = images.view(-1, 3, self.cfg.image_size, self.cfg.image_size).to(self.device)
                  expanded_labels = labels.view(-1, 1).repeat(1, self.cfg.num_views).view(-1).to(self.device)
                  
@@ -186,22 +190,32 @@ class SupConPretrainer:
 
             step += 1
             if step % 10 == 0:
-                LOGGER.info("SupCon Step [%d/%d] - Loss: %.4f", step, self.cfg.steps, loss_second.item())
-
-            # Validation and Early Stopping
-            if self.val_loader and step % len(self.train_loader) == 0:
-                 val_loss = self._validate()
-                 LOGGER.info(f"SupCon Validation Loss: {val_loss:.4f}")
-                 
-                 # Save normal snapshot
-                 torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
-
-                 # Early Stopping check
-                 if self.early_stopper:
-                      self.early_stopper(val_loss, {"model_state_dict": self.model.state_dict()})
-                      if self.early_stopper.early_stop:
-                           LOGGER.info("Early stopping triggered in SupCon Phase!")
-                           break
+                # 1. Run Configured Validation (Subset)
+                val_loss_str = "N/A"
+                patience_str = "N/A"
+                
+                if self.val_loader:
+                     # LOGGER.info(f"Step {step}: Starting Validation (Subset)...") # Reduced checking noise
+                     # print(f"Step {step}: Starting Validation...") # Reduced checking noise
+                     
+                     val_loss = self._validate()
+                     val_loss_str = f"{val_loss:.4f}"
+                     
+                     # Save normal snapshot
+                     torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
+    
+                     # Early Stopping check
+                     if self.early_stopper:
+                          self.early_stopper(val_loss, {"model_state_dict": self.model.state_dict()})
+                          patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
+                          
+                          if self.early_stopper.early_stop:
+                               LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
+                               LOGGER.info("Early stopping triggered in SupCon Phase!")
+                               break
+                
+                # Combined Log Line
+                LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str}")
 
         if not self.early_stopper or not self.early_stopper.early_stop:
              torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
