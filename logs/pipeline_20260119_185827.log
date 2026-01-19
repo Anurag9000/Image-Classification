@@ -1,0 +1,57 @@
+2026-01-19 18:58:27,135 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-19 18:58:27,142 - INFO - ===> Starting SupCon Pretraining Phase
+2026-01-19 18:58:28,042 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 18:58:28,494 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
+2026-01-19 18:58:28,953 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-19 18:58:29,227 - INFO - HybridBackbone Dimensions Detected -> CNN: 2048, ViT: 0
+2026-01-19 18:58:29,234 - INFO - CBAM initialized with channels: 2048
+2026-01-19 18:59:10,060 - INFO - Validation loss decreased (inf --> 4.649113).  Saving model ...
+2026-01-19 18:59:10,291 - INFO - SupCon Step [10/500000] - Loss: 4.4818 - ValLoss: 4.6491 - Patience: 0/10
+2026-01-19 18:59:45,699 - INFO - EarlyStopping counter: 1 out of 10
+2026-01-19 18:59:45,700 - INFO - SupCon Step [20/500000] - Loss: 6.1731 - ValLoss: 4.9036 - Patience: 1/10
+2026-01-19 19:00:27,239 - INFO - EarlyStopping counter: 2 out of 10
+2026-01-19 19:00:27,240 - INFO - SupCon Step [30/500000] - Loss: 5.3030 - ValLoss: 5.0515 - Patience: 2/10
+2026-01-19 19:01:04,006 - INFO - EarlyStopping counter: 3 out of 10
+2026-01-19 19:01:04,006 - INFO - SupCon Step [40/500000] - Loss: 3.6289 - ValLoss: 4.9451 - Patience: 3/10
+2026-01-19 19:01:44,785 - INFO - EarlyStopping counter: 4 out of 10
+2026-01-19 19:01:44,785 - INFO - SupCon Step [50/500000] - Loss: 3.6347 - ValLoss: 4.7798 - Patience: 4/10
+2026-01-19 19:02:26,950 - INFO - EarlyStopping counter: 5 out of 10
+2026-01-19 19:02:26,950 - INFO - SupCon Step [60/500000] - Loss: 4.3514 - ValLoss: 4.8747 - Patience: 5/10
+2026-01-19 19:03:08,585 - INFO - EarlyStopping counter: 6 out of 10
+2026-01-19 19:03:08,586 - INFO - SupCon Step [70/500000] - Loss: 3.2355 - ValLoss: 5.0385 - Patience: 6/10
+2026-01-19 19:04:15,295 - INFO - EarlyStopping counter: 7 out of 10
+2026-01-19 19:04:15,295 - INFO - SupCon Step [80/500000] - Loss: 2.8577 - ValLoss: 5.1126 - Patience: 7/10
+2026-01-19 19:04:52,842 - INFO - EarlyStopping counter: 8 out of 10
+2026-01-19 19:04:52,843 - INFO - SupCon Step [90/500000] - Loss: 4.6128 - ValLoss: 5.0982 - Patience: 8/10
+2026-01-19 19:05:29,465 - INFO - EarlyStopping counter: 9 out of 10
+2026-01-19 19:05:29,466 - INFO - SupCon Step [100/500000] - Loss: 5.0286 - ValLoss: 5.0190 - Patience: 9/10
+2026-01-19 19:06:07,378 - INFO - EarlyStopping counter: 10 out of 10
+2026-01-19 19:06:07,379 - INFO - SupCon Step [110/500000] - Loss: 4.9657 - ValLoss: 4.6651 - Patience: 10/10 [STOP TRIGGERED]
+2026-01-19 19:06:07,379 - INFO - Early stopping triggered in SupCon Phase!
+2026-01-19 19:06:07,519 - INFO - ===> Starting ArcFace Training Phase
+2026-01-19 19:06:07,519 - INFO - Using CombinedFilesDataset with roots: ['d:/Done,Toreview/Image Classification/data']
+2026-01-19 19:06:07,521 - INFO - Creating loader from JSON: d:/Done,Toreview/Image Classification/data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-19 19:06:08,443 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:06:08,443 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-19 19:06:09,596 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:06:10,664 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:06:11,786 - INFO - JsonDataset loaded 617837 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-19 19:06:11,786 - INFO - Created independent Subsets: Train(494271), Val(61783), Test(61783)
+2026-01-19 19:06:12,279 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-19 19:06:12,774 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet50.a1_in1k)
+2026-01-19 19:06:13,088 - INFO - [timm/resnet50.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-19 19:06:13,313 - INFO - HybridBackbone Dimensions Detected -> CNN: 2048, ViT: 0
+2026-01-19 19:06:13,320 - INFO - CBAM initialized with channels: 2048
+2026-01-19 19:06:13,446 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-19 19:06:56,524 - ERROR - Phase arcface failed: local variable 'acc' referenced before assignment
+2026-01-19 19:06:56,530 - ERROR - Traceback (most recent call last):
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 446, in run_pipeline
+    runner()
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 434, in <lambda>
+    "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
+  File "D:\Done,Toreview\Image Classification\pipeline\run_pipeline.py", line 143, in run_arcface_phase
+    trainer.train()
+  File "D:\Done,Toreview\Image Classification\pipeline\train_arcface.py", line 309, in train
+    csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
+UnboundLocalError: local variable 'acc' referenced before assignment
+
