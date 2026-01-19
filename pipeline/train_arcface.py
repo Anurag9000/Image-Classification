@@ -259,7 +259,7 @@ class ArcFaceTrainer:
                     preds = torch.argmax(clean_logits, dim=1)
                     acc = (preds == labels).float().mean() * 100.0
 
-                if step_count % 10 == 0:
+                if step_count % 100 == 0:
                     LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
                     torch.cuda.empty_cache()
                     

@@ -386,7 +386,7 @@ class FineTuneDistillTrainer:
                 preds_all.extend(torch.argmax(student_logits.detach(), dim=1).cpu().numpy())
                 labels_all.extend(labels.cpu().numpy())
  
-                if step_count % 10 == 0:
+                if step_count % 100 == 0:
                      torch.cuda.empty_cache()
                      
                      # Frequent Validation Check (Every 10 steps)

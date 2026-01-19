@@ -189,7 +189,7 @@ class SupConPretrainer:
                  torch.cuda.empty_cache()
 
             step += 1
-            if step % 10 == 0:
+            if step % 100 == 0:
                 # 1. Run Configured Validation (Subset)
                 val_loss_str = "N/A"
                 patience_str = "N/A"
