@@ -80,7 +80,12 @@ class ArcFaceTrainer:
         self.backbone_cfg = BackboneConfig(**self.cfg.backbone)
         self.backbone = HybridBackbone(self.backbone_cfg).to(self.device)
         if self.cfg.compile_model and hasattr(torch, "compile"):
-            self.backbone = torch.compile(self.backbone)  # type: ignore[assignment]
+            # WINDOWS WARNING: torch.compile is unstable on Windows and can hang indefinitely.
+            # Disabling it by default unless user is on Linux.
+            if os.name != 'nt':
+                 self.backbone = torch.compile(self.backbone)
+            else:
+                 LOGGER.warning("Windows detected: Disabling torch.compile to prevent hangs.")
 
         # Load Pretrained SupCon Weights if available
         if self.cfg.supcon_snapshot and os.path.exists(self.cfg.supcon_snapshot):
@@ -189,14 +194,18 @@ class ArcFaceTrainer:
                 LOGGER.error(f"Failed to resume from checkpoint: {e}")
                 raise e
 
-        self.wandb_run = init_wandb(self.cfg.wandb)
+        # self.wandb_run = init_wandb(self.cfg.wandb)
+        self.wandb_run = None # Force disable for debugging hangs
 
-        with open(self.cfg.log_csv, "w", newline="") as f:
-            csv.writer(f).writerow(["epoch", "train_loss", "val_loss", "val_acc", "val_f1"])
+        mode = "a" if self.cfg.resume_from else "w"
+        with open(self.cfg.log_csv, mode, newline="") as f:
+            if mode == "w":
+                csv.writer(f).writerow(["epoch", "train_loss", "val_loss", "val_acc", "val_f1"])
             
         self.step_log_csv = os.path.join(os.path.dirname(self.cfg.log_csv), "train_steps.csv")
-        with open(self.step_log_csv, "w", newline="") as f:
-            csv.writer(f).writerow(["epoch", "step", "loss", "acc", "lr"])
+        with open(self.step_log_csv, mode, newline="") as f:
+            if mode == "w":
+                csv.writer(f).writerow(["epoch", "step", "loss", "acc", "lr"])
 
     def _update_ema(self):
         if self.backbone_ema:
@@ -401,6 +410,8 @@ class ArcFaceTrainer:
                 
                 self.scheduler.step()
                 self._update_ema()
+                
+                epoch_losses.append(loss.detach())
 
                 # -------------------------------------------------------------------------
                 # "Best Model Ever" Requirement: Step-wise Logging & Persistence
@@ -416,8 +427,13 @@ class ArcFaceTrainer:
                 # -------------------------------------------------------------------------
 
             # End of Epoch
-            avg_train_loss = np.mean(epoch_losses) if epoch_losses else 0.0
+            avg_train_loss = np.mean([l.item() for l in epoch_losses]) if epoch_losses else 0.0
             val_loss, val_acc, val_f1 = self._validate()
+            
+            # Explicit Garbage Collection for Windows
+            torch.cuda.empty_cache() 
+            import gc
+            gc.collect()
 
             LOGGER.info(
                 f"Epoch {epoch}/{self.cfg.epochs} - Loss: {avg_train_loss:.4f} | "

@@ -188,9 +188,15 @@ class SupConPretrainer:
             if self.model_ema:
                 self.model_ema.update(self.model)
 
+            # Memory Cleanup
             if step % 200 == 0:
-                 # torch.cuda.empty_cache()
-                 pass
+                 torch.cuda.empty_cache()
+                 import gc
+                 gc.collect()
+
+            # Heartbeat
+            if step % 50 == 0:
+                 print(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})")
             
             # Optional: Automatic recovery from OOM could go here
             # try: ... except RuntimeError: ...
@@ -209,7 +215,8 @@ class SupConPretrainer:
                      val_loss_str = f"{val_loss:.4f}"
                      
                      # Save normal snapshot
-                     torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
+                     # DISABLED: Windows IO Hang Protection
+                     # torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
     
                      # Early Stopping check
                      if self.early_stopper:

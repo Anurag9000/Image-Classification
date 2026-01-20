@@ -3,3 +3,95 @@
 2026-01-20 20:35:48,309 - INFO - Override: Resuming from snapshots_teacher/latest_checkpoint.pth
 2026-01-20 20:35:48,310 - INFO - Using CombinedFilesDataset with roots: ['./data']
 2026-01-20 20:35:48,316 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-20 20:35:49,809 - INFO - Total images in JSON: 617837
+2026-01-20 20:35:49,809 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-20 20:35:50,132 - INFO - JsonDataset loaded 494271 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 20:35:50,151 - INFO - JsonDataset loaded 61783 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 20:35:50,171 - INFO - JsonDataset loaded 61783 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 20:35:50,171 - INFO - Created RAM-Optimized Datasets: Train(494271), Val(61783), Test(61783)
+2026-01-20 20:35:50,465 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-20 20:35:50,810 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet18.a1_in1k)
+2026-01-20 20:35:51,167 - INFO - [timm/resnet18.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-20 20:35:51,362 - INFO - HybridBackbone Dimensions Detected -> CNN: 512, ViT: 0
+2026-01-20 20:35:51,363 - INFO - CBAM initialized with channels: 512
+2026-01-20 20:35:51,602 - INFO - Loading SupCon weights from ./snapshots/supcon_final_best.pth...
+2026-01-20 20:35:51,745 - INFO - SupCon weights loaded successfully.
+2026-01-20 20:35:51,748 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-20 20:35:51,751 - INFO - RESUMING TRAINING from snapshots_teacher/latest_checkpoint.pth
+2026-01-20 20:35:52,067 - INFO - Successfully resumed from Epoch 1, Step 8029
+2026-01-20 20:35:54,927 - INFO - Epoch 1 Step [8030/30892] - Loss: 2.4573 - Acc: 0.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:35:54,931 - WARNING - CRITICAL: Accuracy is EXACTLY 0.0!
+2026-01-20 20:36:04,514 - INFO - Epoch 1 Step [8040/30892] - Loss: 16.0331 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:11,835 - INFO - Epoch 1 Step [8050/30892] - Loss: 7.3197 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:19,304 - INFO - Epoch 1 Step [8060/30892] - Loss: 3.1500 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:23,827 - INFO - Epoch 1 Step [8070/30892] - Loss: 12.3268 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:33,032 - INFO - Epoch 1 Step [8080/30892] - Loss: 9.9280 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:37,364 - INFO - Epoch 1 Step [8090/30892] - Loss: 32.9579 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:48,704 - INFO - Epoch 1 Step [8100/30892] - Loss: 23.8145 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:53,021 - INFO - Epoch 1 Step [8110/30892] - Loss: 20.1528 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:36:57,274 - INFO - Epoch 1 Step [8120/30892] - Loss: 18.4668 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:01,545 - INFO - Epoch 1 Step [8130/30892] - Loss: 21.8140 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:07,204 - INFO - Epoch 1 Step [8140/30892] - Loss: 15.7903 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:12,854 - INFO - Epoch 1 Step [8150/30892] - Loss: 21.1456 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:17,096 - INFO - Epoch 1 Step [8160/30892] - Loss: 18.3154 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:25,470 - INFO - Epoch 1 Step [8170/30892] - Loss: 15.9741 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:29,805 - INFO - Epoch 1 Step [8180/30892] - Loss: 24.4160 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:35,367 - INFO - Epoch 1 Step [8190/30892] - Loss: 18.4856 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:40,407 - INFO - Epoch 1 Step [8200/30892] - Loss: 24.4247 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:48,993 - INFO - Epoch 1 Step [8210/30892] - Loss: 6.5200 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:53,262 - INFO - Epoch 1 Step [8220/30892] - Loss: 9.5824 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:37:57,348 - INFO - Epoch 1 Step [8230/30892] - Loss: 17.3388 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:01,457 - INFO - Epoch 1 Step [8240/30892] - Loss: 3.4377 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:05,549 - INFO - Epoch 1 Step [8250/30892] - Loss: 15.4638 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:09,871 - INFO - Epoch 1 Step [8260/30892] - Loss: 18.4178 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:16,981 - INFO - Epoch 1 Step [8270/30892] - Loss: 6.3849 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:21,347 - INFO - Epoch 1 Step [8280/30892] - Loss: 4.9046 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:25,646 - INFO - Epoch 1 Step [8290/30892] - Loss: 8.6307 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:29,991 - INFO - Epoch 1 Step [8300/30892] - Loss: 20.6652 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:34,355 - INFO - Epoch 1 Step [8310/30892] - Loss: 13.2781 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:38,632 - INFO - Epoch 1 Step [8320/30892] - Loss: 2.4648 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:42,843 - INFO - Epoch 1 Step [8330/30892] - Loss: 2.8981 - Acc: 6.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:47,090 - INFO - Epoch 1 Step [8340/30892] - Loss: 6.9158 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:51,516 - INFO - Epoch 1 Step [8350/30892] - Loss: 7.3661 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:55,761 - INFO - Epoch 1 Step [8360/30892] - Loss: 8.9224 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:38:59,909 - INFO - Epoch 1 Step [8370/30892] - Loss: 28.7236 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:04,174 - INFO - Epoch 1 Step [8380/30892] - Loss: 6.0973 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:08,467 - INFO - Epoch 1 Step [8390/30892] - Loss: 23.5220 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:12,740 - INFO - Epoch 1 Step [8400/30892] - Loss: 7.1744 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:17,020 - INFO - Epoch 1 Step [8410/30892] - Loss: 27.8420 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:21,283 - INFO - Epoch 1 Step [8420/30892] - Loss: 12.4500 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:25,577 - INFO - Epoch 1 Step [8430/30892] - Loss: 27.2881 - Acc: 62.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:29,634 - INFO - Epoch 1 Step [8440/30892] - Loss: 8.7799 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:33,639 - INFO - Epoch 1 Step [8450/30892] - Loss: 3.1353 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:37,617 - INFO - Epoch 1 Step [8460/30892] - Loss: 8.0281 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:41,512 - INFO - Epoch 1 Step [8470/30892] - Loss: 12.5899 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:45,610 - INFO - Epoch 1 Step [8480/30892] - Loss: 19.3456 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:49,555 - INFO - Epoch 1 Step [8490/30892] - Loss: 7.8271 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:39:58,031 - INFO - Validation loss decreased (inf --> 20.700370).  Saving model ...
+2026-01-20 20:39:58,119 - INFO - Epoch 1 Step [8500/30892] - Loss: 6.2091 - Acc: 12.50% - ValLoss: 20.7004 - Patience: 0/50
+2026-01-20 20:40:02,132 - INFO - Epoch 1 Step [8510/30892] - Loss: 20.8070 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:06,037 - INFO - Epoch 1 Step [8520/30892] - Loss: 18.9172 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:09,989 - INFO - Epoch 1 Step [8530/30892] - Loss: 5.1361 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:13,994 - INFO - Epoch 1 Step [8540/30892] - Loss: 28.7892 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:18,688 - INFO - Epoch 1 Step [8550/30892] - Loss: 14.8088 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:23,138 - INFO - Epoch 1 Step [8560/30892] - Loss: 23.9944 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:28,730 - INFO - Epoch 1 Step [8570/30892] - Loss: 15.1745 - Acc: 25.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:33,082 - INFO - Epoch 1 Step [8580/30892] - Loss: 22.1316 - Acc: 62.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:37,539 - INFO - Epoch 1 Step [8590/30892] - Loss: 14.7621 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:41,952 - INFO - Epoch 1 Step [8600/30892] - Loss: 18.0746 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:46,364 - INFO - Epoch 1 Step [8610/30892] - Loss: 21.9593 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:50,772 - INFO - Epoch 1 Step [8620/30892] - Loss: 19.0213 - Acc: 50.00% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:55,243 - INFO - Epoch 1 Step [8630/30892] - Loss: 14.2144 - Acc: 12.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:40:59,691 - INFO - Epoch 1 Step [8640/30892] - Loss: 19.5748 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:04,078 - INFO - Epoch 1 Step [8650/30892] - Loss: 19.0807 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:08,477 - INFO - Epoch 1 Step [8660/30892] - Loss: 21.6378 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:12,932 - INFO - Epoch 1 Step [8670/30892] - Loss: 23.5063 - Acc: 62.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:17,300 - INFO - Epoch 1 Step [8680/30892] - Loss: 17.8652 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:21,684 - INFO - Epoch 1 Step [8690/30892] - Loss: 14.6589 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:26,170 - INFO - Epoch 1 Step [8700/30892] - Loss: 15.5789 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:30,639 - INFO - Epoch 1 Step [8710/30892] - Loss: 5.3158 - Acc: 37.50% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:35,137 - INFO - Epoch 1 Step [8720/30892] - Loss: 17.8040 - Acc: 56.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:39,556 - INFO - Epoch 1 Step [8730/30892] - Loss: 26.2609 - Acc: 43.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:43,981 - INFO - Epoch 1 Step [8740/30892] - Loss: 6.2772 - Acc: 18.75% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:48,414 - INFO - Epoch 1 Step [8750/30892] - Loss: 6.1327 - Acc: 31.25% - ValLoss: N/A - Patience: N/A
+2026-01-20 20:41:52,888 - INFO - Epoch 1 Step [8760/30892] - Loss: 24.1341 - Acc: 37.50% - ValLoss: N/A - Patience: N/A

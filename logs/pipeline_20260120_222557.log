@@ -1,0 +1,5 @@
+2026-01-20 22:25:57,555 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-20 22:25:57,563 - INFO - ===> Starting ArcFace Training Phase
+2026-01-20 22:25:57,563 - INFO - Override: Resuming from snapshots_teacher/latest_checkpoint.pth
+2026-01-20 22:25:57,564 - INFO - Using CombinedFilesDataset with roots: ['./data']
+2026-01-20 22:25:57,569 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json
