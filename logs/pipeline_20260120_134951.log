@@ -1,0 +1,22 @@
+2026-01-20 13:49:51,212 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-20 13:49:51,220 - INFO - ===> Starting ArcFace Training Phase
+2026-01-20 13:49:51,221 - INFO - Using CombinedFilesDataset with roots: ['./data']
+2026-01-20 13:49:51,224 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json
+2026-01-20 13:49:52,665 - INFO - Total images in JSON: 617837
+2026-01-20 13:49:52,666 - INFO - Splitting dataset: Train=494271, Val=61783, Test=61783
+2026-01-20 13:49:53,041 - INFO - JsonDataset loaded 494271 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 13:49:53,067 - INFO - JsonDataset loaded 61783 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 13:49:53,095 - INFO - JsonDataset loaded 61783 images. Classes: {'organic': 0, 'other': 1, 'paper': 2, 'plastic': 3}
+2026-01-20 13:49:53,096 - INFO - Created RAM-Optimized Datasets: Train(494271), Val(61783), Test(61783)
+2026-01-20 13:49:53,415 - INFO - WeightedRandomSampler enabled. Class counts: [ 79224 225438 118240  71369]
+2026-01-20 13:49:53,761 - INFO - Loading pretrained weights from Hugging Face hub (timm/resnet18.a1_in1k)
+2026-01-20 13:49:54,550 - INFO - [timm/resnet18.a1_in1k] Safe alternative available for 'pytorch_model.bin' (as 'model.safetensors'). Loading weights using safetensors.
+2026-01-20 13:49:54,686 - INFO - HybridBackbone Dimensions Detected -> CNN: 512, ViT: 0
+2026-01-20 13:49:54,688 - INFO - CBAM initialized with channels: 512
+2026-01-20 13:49:54,888 - INFO - Loading SupCon weights from ./snapshots/supcon_final_best.pth...
+2026-01-20 13:49:55,025 - INFO - SupCon weights loaded successfully.
+2026-01-20 13:49:55,029 - INFO - Initialized AdaFace Loss (Adaptive Margin for low-quality images).
+2026-01-20 13:52:19,156 - INFO - Validation loss decreased (inf --> 34.613139).  Saving model ...
+2026-01-20 13:52:19,253 - INFO - Epoch 1 Step [100/30892] - Loss: 32.0587 - Acc: 18.75% - ValLoss: 34.6131 - Patience: 0/50
+2026-01-20 13:54:36,344 - INFO - EarlyStopping counter: 1 out of 50
+2026-01-20 13:54:36,345 - INFO - Epoch 1 Step [200/30892] - Loss: 18.1358 - Acc: 25.00% - ValLoss: 36.3514 - Patience: 1/50

@@ -286,16 +286,15 @@ class ArcFaceTrainer:
                     preds = torch.argmax(clean_logits, dim=1)
                     acc = (preds == labels).float().mean() * 100.0
 
-                if step_count % 100 == 0:
-                    # LOGGER.info(f"Step {step_count}: Flushing GPU Memory to prevent fragmentation...")
-                    # torch.cuda.empty_cache()
+                if step_count % 10 == 0:
+                    # Frequent Logging but sparse validation
                     
-                    # 1. Frequent Validation Check (Every 10 steps)
+                    # 1. Validation Check (Every 500 steps)
                     val_loss_str = "N/A"
                     patience_str = "N/A"
                     acc_str = f"{acc.item():.2f}%"
                     
-                    if self.val_loader:
+                    if self.val_loader and step_count % 500 == 0:
                          v_loss, v_acc, v_f1 = self._validate()
                          val_loss_str = f"{v_loss:.4f}"
                          
