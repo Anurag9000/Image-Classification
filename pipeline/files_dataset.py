@@ -108,9 +108,8 @@ class CombinedFilesDataset(Dataset):
             else:
                 # Ensure consistency
                 if label_cols != self.class_names:
-                    # Depending on strictness, we might raise error or just warn.
-                    # For now assume they are consistent as per user context (both had 6 classes)
-                    pass
+                    # STRICT MODE: Raise error if classes differ between folders (e.g. train has 5 classes, val has 6)
+                    raise ValueError(f"Inconsistent class names in {csv_path}. Expected {self.class_names}, got {label_cols}")
             
             # Iterate rows
             for _, row in df.iterrows():

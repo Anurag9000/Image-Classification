@@ -1,0 +1,4 @@
+2026-01-20 13:40:52,931 - INFO - Loading config from: configs/garbage_edge.yaml
+2026-01-20 13:40:52,940 - INFO - ===> Starting ArcFace Training Phase
+2026-01-20 13:40:52,940 - INFO - Using CombinedFilesDataset with roots: ['./data']
+2026-01-20 13:40:52,947 - INFO - Creating loader from JSON: ./data/Dataset_Final_Aug/dataset_aug_metadata.json

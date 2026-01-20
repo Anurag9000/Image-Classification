@@ -51,7 +51,7 @@ class DistillConfig:
     max_steps: Optional[int] = None
     wandb: dict = field(default_factory=dict)
     early_stopping_patience: int = 5
-    teacher_backbone_config: dict = field(default_factory=dict) # Should be passed from global['backbone']
+    teacher_backbone_config: dict = field(default_factory=dict)
     val_split: float = 0.1
     use_sam: bool = False
     use_lookahead: bool = False
