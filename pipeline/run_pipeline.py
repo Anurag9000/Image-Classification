@@ -138,8 +138,8 @@ def run_arcface_phase(cfg: dict) -> None:
         val_split=float(get_cfg("val_split", 0.1)),
         val_split=float(get_cfg("val_split", 0.1)),
         use_amp=get_cfg("use_amp", True),
-        # Pass SupCon Snapshot Path (user preference: use the one we just made/found)
-        supcon_snapshot=cfg.get("supcon_snapshot", "./snapshots/supcon_final.pth"), 
+        # Pass SupCon Snapshot Path - Prefer BEST model
+        supcon_snapshot=cfg.get("supcon_snapshot", "./snapshots/supcon_final_best.pth"), 
     )
     
     trainer = ArcFaceTrainer(train_loader, val_loader, arcface_cfg)
