@@ -9,7 +9,7 @@ dataset:
     - "./data"
   json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
   batch_size: 16 # LOW VRAM MODE: Safe for 6GB GPU
-  num_workers: 4
+  num_workers: 0 # Windows Fix: Prevent shared memory (Page File 1455) errors
   val_split: 0.1
   test_split: 0.1
   augment_online: false # Local Run: Pre-augmented data implies NO online augs.

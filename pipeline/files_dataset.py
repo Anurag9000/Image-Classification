@@ -18,12 +18,15 @@ class JsonDataset(Dataset):
     Dataset that reads from a JSON metadata file.
     Expected JSON format: List of dicts with 'file_path' and 'label'.
     """
-    def __init__(self, json_path: str, root_dir: str, transform: Optional[A.Compose] = None):
+    def __init__(self, json_path: str | List[dict], root_dir: str, transform: Optional[A.Compose] = None):
         self.root_dir = root_dir
         self.transform = transform
         
-        with open(json_path, 'r') as f:
-            self.metadata = json.load(f)
+        if isinstance(json_path, list):
+            self.metadata = json_path
+        else:
+            with open(json_path, 'r') as f:
+                self.metadata = json.load(f)
             
         # Create class mapping
         self.classes = sorted(list(set(item['label'] for item in self.metadata)))
@@ -176,9 +179,14 @@ def create_garbage_loader(
         # root_dirs[0] assumed to be data root if provided
         data_root = root_dirs[0] if root_dirs else "./data"
         
-        full_dataset = JsonDataset(json_path, data_root, transform=train_transform)
-        
-        total_len = len(full_dataset)
+        # OPTIMIZATION: Load JSON once to save RAM (avoid 3x copies)
+        with open(json_path, 'r') as f:
+            full_metadata = json.load(f)
+            
+        full_len = len(full_metadata)
+        LOGGER.info(f"Total images in JSON: {full_len}")
+
+        total_len = len(full_metadata)
         val_len = int(total_len * val_split)
         test_len = int(total_len * test_split)
         train_len = total_len - val_len - test_len
@@ -195,18 +203,19 @@ def create_garbage_loader(
         val_idx = indices[train_len : train_len + val_len]
         test_idx = indices[train_len + val_len :]
         
-        # 2. Create independent Dataset instances with correct transforms
-        # This ensures Validation and Test sets are NOT augmented, even though they come from the same JSON
-        train_base = JsonDataset(json_path, data_root, transform=train_transform)
-        val_base = JsonDataset(json_path, data_root, transform=val_transform)
-        test_base = JsonDataset(json_path, data_root, transform=val_transform)
+        # 2. Extract Sub-Lists -> New JsonDataset instances
+        # This is much cleaner and RAM efficient than Subset(JsonDataset()) which holds the whole list
+        train_meta = [full_metadata[i] for i in train_idx]
+        val_meta = [full_metadata[i] for i in val_idx]
+        test_meta = [full_metadata[i] for i in test_idx]
         
-        # 3. Create Subsets pointing to the appropriate base dataset
-        train_dataset = torch.utils.data.Subset(train_base, train_idx)
-        val_dataset = torch.utils.data.Subset(val_base, val_idx)
-        test_dataset = torch.utils.data.Subset(test_base, test_idx)
+        full_metadata = None # Free gigantic list from memory immediately
+
+        train_dataset = JsonDataset(train_meta, data_root, transform=train_transform)
+        val_dataset = JsonDataset(val_meta, data_root, transform=val_transform)
+        test_dataset = JsonDataset(test_meta, data_root, transform=val_transform)
         
-        LOGGER.info(f"Created independent Subsets: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+        LOGGER.info(f"Created RAM-Optimized Datasets: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
         
     else:
         # CSV/Folder Mode
@@ -231,10 +240,10 @@ def create_garbage_loader(
     # Create WeightedRandomSampler for balanced training
     # 1. Gather all labels from the training dataset
     if json_path:
-        # Access underlying dataset and indices
-        train_labels = [train_base.metadata[i]['label'] for i in train_idx]
+        # Optimization: train_dataset is now a standalone JsonDataset, not a Subset
+        train_labels = [item['label'] for item in train_dataset.metadata]
         # Map string labels to indices
-        train_labels_idx = [train_base.class_to_idx[l] for l in train_labels]
+        train_labels_idx = [train_dataset.class_to_idx[l] for l in train_labels]
     else:
         # CombinedFilesDataset (list of tuples (path, label))
         train_labels_idx = [item[1] for item in train_dataset.samples]
