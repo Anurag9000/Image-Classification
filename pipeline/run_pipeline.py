@@ -140,7 +140,6 @@ def run_arcface_phase(cfg: dict, resume_path: str = None) -> None:
         early_stopping_patience=int(get_cfg("early_stopping_patience", 5)),
         val_split=float(get_cfg("val_split", 0.1)),
         use_amp=get_cfg("use_amp", True),
-        use_amp=get_cfg("use_amp", True),
         # Pass SupCon Snapshot Path - Prefer BEST model
         supcon_snapshot=cfg.get("supcon_snapshot", "./snapshots/supcon_final_best.pth"),
         resume_from=resume_path
