@@ -76,8 +76,11 @@ def run_supcon_phase(full_cfg: dict) -> None:
     SupConPretrainer(loader, val_loader, supcon_cfg).train()
 
 
-def run_arcface_phase(cfg: dict) -> None:
+def run_arcface_phase(cfg: dict, resume_path: str = None) -> None:
     LOGGER.info("===> Starting ArcFace Training Phase")
+    
+    if resume_path:
+        LOGGER.info(f"Override: Resuming from {resume_path}")
     
     if "dataset" in cfg and "root_dirs" in cfg["dataset"]:
         LOGGER.info(f"Using CombinedFilesDataset with roots: {cfg['dataset']['root_dirs']}")
@@ -137,8 +140,10 @@ def run_arcface_phase(cfg: dict) -> None:
         early_stopping_patience=int(get_cfg("early_stopping_patience", 5)),
         val_split=float(get_cfg("val_split", 0.1)),
         use_amp=get_cfg("use_amp", True),
+        use_amp=get_cfg("use_amp", True),
         # Pass SupCon Snapshot Path - Prefer BEST model
-        supcon_snapshot=cfg.get("supcon_snapshot", "./snapshots/supcon_final_best.pth"), 
+        supcon_snapshot=cfg.get("supcon_snapshot", "./snapshots/supcon_final_best.pth"),
+        resume_from=resume_path
     )
     
     trainer = ArcFaceTrainer(train_loader, val_loader, arcface_cfg)
@@ -417,7 +422,7 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
     LOGGER.info(f"TTA Evaluation F1 Score (Macro): {f1:.4f}")
 
 
-def run_pipeline(config_path: str, phases: List[str]) -> None:
+def run_pipeline(config_path: str, phases: List[str], resume_path: str = None) -> None:
 
     # Auto-generate unique log file
     import datetime
@@ -433,7 +438,7 @@ def run_pipeline(config_path: str, phases: List[str]) -> None:
 
     phase_map = {
         "supcon": lambda: run_supcon_phase(cfg), # Pass FULL config to access dataset/backbone
-        "arcface": lambda: run_arcface_phase(cfg), # Pass full cfg to arcface runner to access 'dataset'
+        "arcface": lambda: run_arcface_phase(cfg, resume_path), # Pass resume_path explicitly
         "distill": lambda: run_distill_phase(cfg), # Pass full cfg to access global backbone for teacher
         "evaluate": lambda: run_evaluation_phase(cfg), # Pass FULL config to access global props
         "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
@@ -463,9 +468,10 @@ def parse_args() -> argparse.Namespace:
         default=["supcon", "arcface", "distill", "evaluate", "tta"],
         help="Pipeline phases to execute in order.",
     )
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from.")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_pipeline(args.config, args.phases)
+    run_pipeline(args.config, args.phases, args.resume)

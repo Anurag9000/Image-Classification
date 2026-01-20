@@ -61,8 +61,10 @@ class ArcFaceConfig:
     early_stopping_patience: int = 5
     val_split: float = 0.1
     use_sam: bool = False
+    use_sam: bool = False
     use_lookahead: bool = False
     supcon_snapshot: Optional[str] = None # Path to pretrained SupCon model to load
+    resume_from: Optional[str] = None # Resume from checkpoint
 
 
 class ArcFaceTrainer:
@@ -161,6 +163,32 @@ class ArcFaceTrainer:
         self.backbone_ema = ModelEMA(self.backbone, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
         self.head_ema = ModelEMA(self.head, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
         self.manifold_mixup_enabled = self.cfg.use_manifold_mixup
+        
+        self.start_epoch = 1
+        self.step_resumed = 0
+        
+        # Resume Logic
+        if self.cfg.resume_from and os.path.exists(self.cfg.resume_from):
+            LOGGER.info(f"RESUMING TRAINING from {self.cfg.resume_from}")
+            try:
+                ckpt = torch.load(self.cfg.resume_from, map_location=self.device)
+                
+                # Load models
+                self.backbone.load_state_dict(ckpt['backbone_state_dict'])
+                self.head.load_state_dict(ckpt['head_state_dict'])
+                
+                # Load optimizer/states
+                if 'optimizer_state_dict' in ckpt:
+                    self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+                
+                self.start_epoch = ckpt.get('epoch', 1)
+                self.step_resumed = ckpt.get('step', 0)
+                
+                LOGGER.info(f"Successfully resumed from Epoch {self.start_epoch}, Step {self.step_resumed}")
+            except Exception as e:
+                LOGGER.error(f"Failed to resume from checkpoint: {e}")
+                raise e
+
         self.wandb_run = init_wandb(self.cfg.wandb)
 
         with open(self.cfg.log_csv, "w", newline="") as f:
@@ -231,11 +259,13 @@ class ArcFaceTrainer:
     def train(self):
         self.backbone.train()
         self.head.train()
+        
+        step_count = self.step_resumed
 
-        for epoch in range(1, self.cfg.epochs + 1):
+        for epoch in range(self.start_epoch, self.cfg.epochs + 1):
             epoch_losses = []
             preds_all, labels_all = [], []
-            step_count = 0
+            # step_count = 0  <-- Removed reset
 
             for images, labels in self.train_loader:
                 step_count += 1
