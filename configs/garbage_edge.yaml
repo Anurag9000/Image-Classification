@@ -1,0 +1,100 @@
+project_name: "Garbage_Classification_Edge_v1"
+experiment_name: "Distill_ResNetSwin_to_MobileNet"
+
+# Data Config (Shared)
+# Data Config (Shared)
+# Data Config (Shared)
+dataset:
+  root_dirs:
+    - "./data"
+  json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
+<<<<<<< HEAD
+  batch_size: 128 # CLOUD MODE: Large batch for stable gradients
+  num_workers: 8  # Use more cores
+=======
+  batch_size: 16 # LOW VRAM MODE: Safe for 6GB GPU
+  num_workers: 4
+>>>>>>> local
+  val_split: 0.1
+  test_split: 0.1
+  augment_online: false # Local Run: Pre-augmented data implies NO online augs.
+
+# -------------------------------------------------------------------------
+# Phase 1 & 2: The TEACHER (ResNet50 + AdaFace)
+# -------------------------------------------------------------------------
+backbone: 
+  cnn_model: "resnet18"
+  vit_model: null # Disabled for VRAM/Speed
+  pretrained: true
+embedding_size: 512
+num_classes: 4
+
+supcon:
+  enabled: true
+  epochs: 1000        # User Request: High epochs to let Early Stopping trigger
+  batch_size: 16      # LOW VRAM MODE
+  num_views: 2
+<<<<<<< HEAD
+  lr: 1.0e-4 # Higher LR for huge batch size
+  steps: 10000        # Capped at 10k as per user request
+  use_sam: true       # CLOUD MODE: Enable SAM
+  use_lookahead: true # CLOUD MODE: Enable Lookahead
+  early_stopping_patience: 20 # Cloud: 20
+=======
+  lr: 1.0e-5
+  steps: 10000        # Capped at 10k as per user request
+  use_sam: false      # Disabled for Speed/VRAM
+  use_lookahead: false # Disabled for VRAM
+  early_stopping_patience: 50 # Local: 50
+>>>>>>> local
+
+arcface:
+  enabled: true
+  epochs: 20
+  lr: 1.0e-5
+  snapshot_dir: "./snapshots_teacher"
+<<<<<<< HEAD
+  early_stopping_patience: 20 # Cloud: 20
+=======
+  early_stopping_patience: 50 # Local: 50
+>>>>>>> local
+  use_amp: true 
+  use_curricularface: false 
+  ema_decay: null     # RAM SAVING: Disabled
+  use_sam: false      # Disabled
+  use_lookahead: false # Disabled
+
+# -------------------------------------------------------------------------
+# Phase 3: The STUDENT (Tiny Edge Model)
+# -------------------------------------------------------------------------
+distill:
+  enabled: true
+  epochs: 30
+  distill_weight: 0.5 
+  mix_method: "mixup"
+  use_manifold_mixup: false
+  temperature: 3.0    
+  
+  # Path to the Teacher we just trained (Pipeline defaults to this, but explicit is good)
+  teacher_backbone_path: "./snapshots_teacher/best_model.pth"
+  
+  # DEFINITION OF THE STUDENT (Raspberry Pi Friendly!)
+  backbone:
+    cnn_model: "mobilenetv3_large_100" 
+    vit_model: null                    
+    pretrained: true
+    fusion_dim: 1280                   
+  
+  log_csv: "./logs/distill_edge_metrics.csv"
+  snapshot_dir: "./snapshots_edge_student"
+<<<<<<< HEAD
+  early_stopping_patience: 20 # Cloud: 20
+  use_sam: true         # CLOUD MODE: Enable SAM
+  use_lookahead: true   # CLOUD MODE: Enable Lookahead
+  ema_decay: 0.9995     # CLOUD MODE: Enable EMA
+=======
+  early_stopping_patience: 50 # Local: 50
+  use_sam: false        # Disabled
+  use_lookahead: false  # Disabled
+  ema_decay: null       # Disabled
+>>>>>>> local
