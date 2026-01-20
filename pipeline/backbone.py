@@ -158,6 +158,7 @@ class HybridBackbone(nn.Module):
         super().__init__()
         self.cfg = config or BackboneConfig()
 
+        self.token_learner = None  # Initialize early to avoid AttributeError in _vit_features during dim detection
         self.cnn_backbone = create_model(
             self.cfg.cnn_model,
             pretrained=self.cfg.pretrained,
@@ -184,8 +185,7 @@ class HybridBackbone(nn.Module):
         else:
             self.vit_backbone = nn.Identity()
 
-        # LoRA/IA3 injections (omitted for brevity, assume unchanged)
-        # ... (lines 182-237)
+
 
         if self.cfg.cnn_lora_rank:
             lora_cfg = LoRAConfig(

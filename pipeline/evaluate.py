@@ -309,22 +309,7 @@ class Evaluator:
         LOGGER.info("Saved %s", path)
 
 
-# def calibrate_temperature(logits, labels):
-#     """
-#     Utility function for Temperature Scaling (Calibration).
-#     Currently unused in main pipeline but reserved for future post-processing.
-#     """
-#     temperature = torch.tensor(1.0, requires_grad=True, device=logits.device)
-#     optimizer = torch.optim.LBFGS([temperature], lr=0.01, max_iter=50)
 
-#     def eval():
-#         loss = F.cross_entropy(logits / temperature, labels)
-#         loss.backward()
-#         return loss
-
-#     optimizer.step(eval)
-#     LOGGER.info("Optimal Temperature: %.4f", temperature.item())
-#     return temperature.item()
 
 
 if __name__ == "__main__":

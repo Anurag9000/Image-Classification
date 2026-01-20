@@ -94,20 +94,8 @@ def run_arcface_phase(cfg: dict, resume_path: str = None) -> None:
             augment_online=cfg["dataset"].get("augment_online", True)
         )
     else:
-        # Legacy/Standard Loader (updates might be needed if this path is used, but for now keep as is or unpack)
-        # Note: create_arcface_loader returns 2 items in current code. 
-        # If we are strictly using the new path, this is fine. 
-        # But for safety, valid/test might be mixed or ignored here.
-        train_loader, val_loader = create_arcface_loader(
-            batch_size=cfg.get("batch_size", 32),
-            augment=cfg.get("augment", True),
-            image_size=cfg.get("image_size", 224),
-            augmentations=cfg.get("augmentations"),
-            root=cfg.get("data_root", "./data"),
-            num_workers=cfg.get("num_workers", 0),
-            val_split=cfg.get("val_split", 0.1),
-        )
-        test_loader = None
+        LOGGER.error("Dataset configuration missing 'root_dirs'. Please update config to use 'files_dataset.CombinedFilesDataset'.")
+        raise ValueError("Missing 'root_dirs' in dataset config.")
 
     # Merge global cfg (for num_classes/backbone) with arcface specific cfg
     # Priority: arcface_cfg > global_cfg > defaults
@@ -283,36 +271,52 @@ def run_evaluation_phase(full_cfg: dict) -> None:
     evaluator = Evaluator(loader, num_classes=num_classes, config=eval_cfg)
     
     # Load best model from arcface or distill snapshot
-    # Priority: Distill Best > ArcFace Best > ArcFace Final
-    # But usually we evaluate the "Main" model.
-    # Where does ArcFace save? snapshots/backbone_best.pth or similar.
-    # We should look in arcface snapshot dir.
-    
     snapshot_dir = full_cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")
-    snapshot_path = os.path.join(snapshot_dir, "backbone_best.pth") # specific to ArcFaceTrainer
     
-    # Try project name based
-    if "project_name" in full_cfg:
+    # Priority 1: best_model.pth (Produced by EarlyStopping in ArcFaceTrainer)
+    snapshot_path = os.path.join(snapshot_dir, "best_model.pth")
+    
+    # Priority 2: Project name based (Old convention)
+    if "project_name" in full_cfg and not os.path.exists(snapshot_path):
          p_path = os.path.join(snapshot_dir, f"{full_cfg['project_name']}_best.pth")
          if os.path.exists(p_path):
              snapshot_path = p_path
-             
+
+    # Priority 3: Explicit backbone_best.pth (Manual Save)
     if not os.path.exists(snapshot_path):
-        LOGGER.warning(f"Feature Extractor snapshot not found at {snapshot_path}, checking final...")
+        backbone_best = os.path.join(snapshot_dir, "backbone_best.pth")
+        if os.path.exists(backbone_best):
+            snapshot_path = backbone_best
+
+    if not os.path.exists(snapshot_path):
+        LOGGER.warning(f"Best model snapshot not found at {snapshot_path}, checking final backbone...")
         snapshot_path = os.path.join(snapshot_dir, "backbone_final.pth")
 
     if not os.path.exists(snapshot_path):
-         LOGGER.error(f"FATAL: No model snapshot found to evaluate at {snapshot_path}")
+         LOGGER.error(f"FATAL: No model snapshot found to evaluate at {snapshot_dir}")
          return
 
     LOGGER.info(f"Loading model for evaluation from {snapshot_path}")
     
-    # Helper to load header too? 
-    # Evaluator needs head for loss/accuracy. 
-    # ArcFaceTrainer saves head separately? usually 'head_best.pth'
-    head_path = snapshot_path.replace("backbone", "head")
-    if not os.path.exists(head_path):
-        head_path = None
+    # helper to check if head checkpoint exists if we are loading backbone only??
+    # Actually Evaluator.load_model handles whether it's a full dict or just backbone.
+    # But if it's a full dict (best_model.pth), it contains 'head_state_dict'.
+    # We should let Evaluator.load_model handle extracting it without needing explict head path if it's inside.
+    # However, Evaluator.load_model signature is load_model(backbone_path, head_path=None).
+    # If backbone_path is the full dict, we might need to pass it as head_path too or let Evaluator split it.
+    
+    # Let's assume Evaluator.load_model is smart enough or we duplicate the path if it's best_model.pth
+    head_path = None
+    # If using best_model.pth, it likely contains head dict too, so pass same path as head_path logic?
+    # Or rely on naming convention if separate files.
+    
+    if "best_model.pth" in snapshot_path:
+        head_path = snapshot_path # Pass same file, load_model should handle if it has head key
+    else:
+        # Standard convention: backbone_X.pth -> head_X.pth
+        head_path = snapshot_path.replace("backbone", "head")
+        if not os.path.exists(head_path):
+             head_path = None
         
     model, head = evaluator.load_model(snapshot_path, head_path=head_path)
     evaluator.evaluate(model, head)

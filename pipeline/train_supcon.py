@@ -127,7 +127,7 @@ class SupConPretrainer:
             try:
                 images, labels = next(data_iter)
             except StopIteration:
-                data_iter = iter(self.dataloader)
+                data_iter = iter(self.train_loader)
                 images, labels = next(data_iter)
 
             # Images is (B, V, C, H, W) where V is num_views

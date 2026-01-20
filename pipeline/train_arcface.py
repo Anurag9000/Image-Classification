@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+import time
 import torch
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, f1_score
@@ -60,7 +61,6 @@ class ArcFaceConfig:
     wandb: dict = field(default_factory=dict)
     early_stopping_patience: int = 5
     val_split: float = 0.1
-    use_sam: bool = False
     use_sam: bool = False
     use_lookahead: bool = False
     supcon_snapshot: Optional[str] = None # Path to pretrained SupCon model to load
@@ -263,11 +263,14 @@ class ArcFaceTrainer:
         step_count = self.step_resumed
 
         for epoch in range(self.start_epoch, self.cfg.epochs + 1):
+            print(f"[HEARTBEAT] Starting Epoch {epoch}...")
             epoch_losses = []
             preds_all, labels_all = [], []
-            # step_count = 0  <-- Removed reset
+            # step_count not reset within epoch to track global steps correctly
 
             for images, labels in self.train_loader:
+                # Heartbeat: Data Loaded
+                print(f"[HEARTBEAT] Loaded Batch {step_count} (Time: {time.time()})")
                 step_count += 1
                 if hasattr(self.cfg, "max_steps") and self.cfg.max_steps and step_count > self.cfg.max_steps:
                     break
@@ -325,7 +328,9 @@ class ArcFaceTrainer:
                     acc_str = f"{acc.item():.2f}%"
                     
                     if self.val_loader and step_count % 500 == 0:
+                         print(f"[HEARTBEAT] Entering Validation at Step {step_count}...")
                          v_loss, v_acc, v_f1 = self._validate()
+                         print(f"[HEARTBEAT] Exited Validation at Step {step_count}.")
                          val_loss_str = f"{v_loss:.4f}"
                          
                          # Early Stopping Check
@@ -404,15 +409,10 @@ class ArcFaceTrainer:
                 with open(self.step_log_csv, 'a', newline='') as f:
                     csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
 
-                # 2. Save "Latest" model every step (Overwrite)
-                # Note: Saving full state dict every step is I/O intensive but requested.
-                torch.save({
-                    'epoch': epoch,
-                    'step': step_count,
-                    'backbone_state_dict': self.backbone.state_dict(),
-                    'head_state_dict': self.head.state_dict(),
-                    'optimizer_state_dict': self.optimizer.state_dict(),
-                }, os.path.join(self.cfg.snapshot_dir, "latest_checkpoint.pth"))
+                # 2. Save "Latest" model every 100 steps (Optimized IO)
+                # DISABLED: Speculated cause of Windows Hangs (File Locking/IO blocking)
+                # if step_count % 100 == 0:
+                #    torch.save({...}, ...)
                 # -------------------------------------------------------------------------
 
             # End of Epoch
@@ -454,6 +454,7 @@ class ArcFaceTrainer:
 
         # Save Final models
         save_snapshot(self.backbone, self.cfg.epochs, folder=self.cfg.snapshot_dir)
+        torch.save(self.backbone.state_dict(), os.path.join(self.cfg.snapshot_dir, "backbone_final.pth"))
         torch.save(self.head.state_dict(), os.path.join(self.cfg.snapshot_dir, "head", "head_final.pth"))
         LOGGER.info(f"Training finished. Final models saved in {self.cfg.snapshot_dir}")
 
