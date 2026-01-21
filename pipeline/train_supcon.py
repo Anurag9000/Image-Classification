@@ -189,14 +189,15 @@ class SupConPretrainer:
                 self.model_ema.update(self.model)
 
             # Memory Cleanup
-            if step % 200 == 0:
-                 torch.cuda.empty_cache()
-                 import gc
-                 gc.collect()
+            # Memory Cleanup
+            # if step % 200 == 0:
+            #      torch.cuda.empty_cache()
+            #      import gc
+            #      gc.collect()
 
             # Heartbeat
             if step % 50 == 0:
-                 print(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})")
+                 print(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})", flush=True)
             
             # Optional: Automatic recovery from OOM could go here
             # try: ... except RuntimeError: ...

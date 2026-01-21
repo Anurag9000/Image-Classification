@@ -279,7 +279,7 @@ class ArcFaceTrainer:
 
             for images, labels in self.train_loader:
                 # Heartbeat: Data Loaded
-                print(f"[HEARTBEAT] Loaded Batch {step_count} (Time: {time.time()})")
+                print(f"[HEARTBEAT] Loaded Batch {step_count} (Time: {time.time()})", flush=True)
                 step_count += 1
                 if hasattr(self.cfg, "max_steps") and self.cfg.max_steps and step_count > self.cfg.max_steps:
                     break
@@ -431,9 +431,10 @@ class ArcFaceTrainer:
             val_loss, val_acc, val_f1 = self._validate()
             
             # Explicit Garbage Collection for Windows
-            torch.cuda.empty_cache() 
-            import gc
-            gc.collect()
+            # Explicit Garbage Collection for Windows
+            # torch.cuda.empty_cache() 
+            # import gc
+            # gc.collect()
 
             LOGGER.info(
                 f"Epoch {epoch}/{self.cfg.epochs} - Loss: {avg_train_loss:.4f} | "
