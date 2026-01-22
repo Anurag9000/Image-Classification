@@ -1,0 +1,78 @@
+project_name: "Garbage_Classification_Cloud_v1"
+experiment_name: "ResNet50_SwinV2_SAM_EMA"
+
+# Data Config
+dataset:
+  root_dirs:
+    - "./data"
+  json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
+  batch_size: 32 # Cloud GPU can handle more
+  num_workers: 8 # Cloud CPU is strong
+  val_split: 0.1
+  test_split: 0.1
+  augment_online: true # Enable online augmentation for robustness
+
+# -------------------------------------------------------------------------
+# Phase 1 & 2: The TEACHER (Heavy Hybrid Model)
+# -------------------------------------------------------------------------
+backbone: 
+  cnn_model: "resnet50" # Upgraded from resnet18
+  vit_model: "swinv2_base_window12_192_22k" # ENABLED: Powerful Vision Transformer
+  pretrained: true
+  fusion_dim: 1024
+  use_cbam: true # Attention
+  mixstyle: true # Domain Generalization
+
+embedding_size: 512
+num_classes: 4
+
+supcon:
+  enabled: true
+  epochs: 1000
+  batch_size: 32
+  num_views: 2
+  lr: 3.0e-4 # Higher LR for SAM/Batch32
+  steps: 10000
+  use_sam: true         # ENABLED: Sharpness-Aware Minimization
+  rho: 0.05
+  use_lookahead: true   # ENABLED: Optimizer stabilizer
+  lookahead_k: 5
+  lookahead_alpha: 0.5
+  early_stopping_patience: 100
+  ema_decay: 0.999      # ENABLED: Model EMA
+
+arcface:
+  enabled: true
+  epochs: 100
+  lr: 3.0e-4
+  snapshot_dir: "./snapshots_teacher_cloud"
+  early_stopping_patience: 20
+  use_amp: true 
+  use_curricularface: true # ENABLED: Hard sample mining
+  ema_decay: 0.999         # ENABLED
+  use_sam: true            # ENABLED
+  use_lookahead: true      # ENABLED
+  
+# -------------------------------------------------------------------------
+# Phase 3: The STUDENT (Distillation)
+# -------------------------------------------------------------------------
+distill:
+  enabled: true
+  epochs: 100
+  distill_weight: 0.5
+  temperature: 3.0
+  teacher_backbone_path: "./snapshots_teacher_cloud/best_model.pth"
+  
+  # Student is still lightweight for Edge deployment
+  backbone:
+    cnn_model: "mobilenetv3_large_100" 
+    vit_model: null 
+    pretrained: true
+    fusion_dim: 1280
+  
+  log_csv: "./logs/distill_cloud_metrics.csv"
+  snapshot_dir: "./snapshots_edge_student_cloud"
+  early_stopping_patience: 30
+  use_sam: true
+  use_lookahead: false
+  ema_decay: 0.999
