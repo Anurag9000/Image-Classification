@@ -503,6 +503,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from.")
     parser.add_argument("--batch_size", type=int, default=None, help="Override batch size.")
+    parser.add_argument("--patience", type=int, default=None, help="Override early stopping patience.")
     return parser.parse_args()
 
 
@@ -534,6 +535,12 @@ if __name__ == "__main__":
         
         # Also need to override kwargs passed to create_garbage_loader if they pull from config...
         # run_arcface_phase lines 89+ pull from cfg["dataset"] so modifying it here works!
+
+    if args.patience:
+        LOGGER.info(f"CLI Override: Setting Early Stopping Patience to {args.patience}")
+        if "supcon" in cfg: cfg["supcon"]["early_stopping_patience"] = args.patience
+        # Arcface config keys might differ, let's ensure it's propagated
+        if "arcface" in cfg: cfg["arcface"]["early_stopping_patience"] = args.patience
 
     # We need a slightly modified run_pipeline that accepts the CFG object instead of reloading it.
     # Refactoring run_pipeline to accept cfg OR path.
