@@ -27,6 +27,7 @@ supcon:
     use_ia3: true
     cnn_drop_path_rate: 0.1
     vit_drop_path_rate: 0.2
+    use_cbam: true
     mixstyle: true
     mixstyle_p: 0.4
     mixstyle_alpha: 0.1
@@ -77,6 +78,7 @@ arcface:
     mixstyle: true
     mixstyle_p: 0.5
     mixstyle_alpha: 0.1
+    use_cbam: true
 
 distill:
   enabled: true
@@ -109,6 +111,7 @@ distill:
     use_ia3: true
     cnn_drop_path_rate: 0.1
     vit_drop_path_rate: 0.25
+    use_cbam: true
 
 evaluation:
   num_classes: 100

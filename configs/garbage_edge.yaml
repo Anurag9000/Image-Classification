@@ -21,6 +21,7 @@ backbone:
   cnn_model: "resnet18"
   vit_model: null # Disabled for VRAM/Speed
   pretrained: true
+  use_cbam: true # Interleaved CBAM
 embedding_size: 512
 num_classes: 4
 
