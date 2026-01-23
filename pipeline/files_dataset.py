@@ -195,21 +195,47 @@ def create_garbage_loader(
         # Ensure splits aren't empty if requested
         if test_split > 0 and test_len == 0: lengths = [train_len - 1, val_len, 1] 
         
-        LOGGER.info(f"Splitting dataset: Train={lengths[0]}, Val={lengths[1]}, Test={lengths[2]}")
+        LOGGER.info(f"Splitting dataset: Train={train_len} (est), Val={val_len} (est), Test={test_len} (est) [Stratified by Class]")
         
-        # 1. Get indices
-        indices = torch.randperm(total_len, generator=torch.Generator().manual_seed(42)).tolist()
-        train_idx = indices[:train_len]
-        val_idx = indices[train_len : train_len + val_len]
-        test_idx = indices[train_len + val_len :]
+        # Stratified Split Logic
+        from collections import defaultdict
+        class_groups = defaultdict(list)
+        for item in full_metadata:
+            class_groups[item['label']].append(item)
+
+        train_meta, val_meta, test_meta = [], [], []
         
-        # 2. Extract Sub-Lists -> New JsonDataset instances
-        # This is much cleaner and RAM efficient than Subset(JsonDataset()) which holds the whole list
-        train_meta = [full_metadata[i] for i in train_idx]
-        val_meta = [full_metadata[i] for i in val_idx]
-        test_meta = [full_metadata[i] for i in test_idx]
+        # Generator for reproducibility
+        g = torch.Generator().manual_seed(42)
+
+        for label, items in class_groups.items():
+            n = len(items)
+            n_val = int(n * val_split)
+            n_test = int(n * test_split)
+            n_train = n - n_val - n_test
+            
+            # Ensure at least 1 training sample if possible
+            if n_train == 0 and n > 0:
+                n_train = 1
+                if n_val > 0: n_val -= 1
+                elif n_test > 0: n_test -= 1
+            
+            # Shuffle indices for this class
+            indices = torch.randperm(n, generator=g).tolist()
+            
+            # Slice
+            idx_train = indices[:n_train]
+            idx_val = indices[n_train : n_train + n_val]
+            idx_test = indices[n_train + n_val :]
+            
+            for i in idx_train: train_meta.append(items[i])
+            for i in idx_val: val_meta.append(items[i])
+            for i in idx_test: test_meta.append(items[i])
+
+        # Shuffle again to mix classes in the final lists (optional but good for batches)
+        # Actually DataLoader shuffles, so not strictly needed, but good for sanity
         
-        full_metadata = None # Free gigantic list from memory immediately
+        full_metadata = None # Free memory
 
         train_dataset = JsonDataset(train_meta, data_root, transform=train_transform)
         val_dataset = JsonDataset(val_meta, data_root, transform=val_transform)

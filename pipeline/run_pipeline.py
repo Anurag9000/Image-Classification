@@ -11,6 +11,35 @@ from torch.utils.data import DataLoader
 from torchvision import datasets
 import numpy as np
 from sklearn.metrics import accuracy_score, f1_score
+import sys
+
+# --- Auto-Logging Redirect ---
+class LoggerWriter:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.linebuf = ''
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.level, line.rstrip())
+
+    def flush(self):
+        pass
+
+def setup_global_logging_redirection():
+    # Setup basic file logging if not already done by setup_logger
+    # We just need to capture stdout/stderr to the ROOT logger.
+    
+    # We assume setup_logger has been called and root logger is configured.
+    logger = logging.getLogger() # Root logger
+    
+    # Redirect stdout to INFO
+    sys.stdout = LoggerWriter(logger, logging.INFO)
+    # Redirect stderr to ERROR
+    sys.stderr = LoggerWriter(logger, logging.ERROR)
+    
+    LOGGER.info("Global stdout/stderr redirection enabled. All prints will now appear in logs.")
 
 
 from .evaluate import EvaluationConfig, Evaluator
@@ -461,6 +490,7 @@ def run_pipeline(config_path: str, phases: List[str], resume_path: str = None) -
             raise
 
 
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Image classification pipeline runner.")
     parser.add_argument("--config", default="configs/config.yaml", help="Path to YAML config file.")
@@ -472,9 +502,69 @@ def parse_args() -> argparse.Namespace:
         help="Pipeline phases to execute in order.",
     )
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from.")
+    parser.add_argument("--batch_size", type=int, default=None, help="Override batch size.")
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_pipeline(args.config, args.phases, args.resume)
+    
+    # Pre-load config to modify it, or modify run_pipeline to accept overrides?
+    # Better to modify execution flow here.
+    
+    # 1. Setup rudimentary logging to stdout first? No, run_pipeline sets it up.
+    # We need to setup logger FIRST to capture everything.
+    import datetime
+    os.makedirs("./logs", exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = f"./logs/pipeline_{timestamp}.log"
+    print(f"Logging to: {os.path.abspath(log_file)}")
+    setup_logger(log_file)
+    setup_global_logging_redirection()
+    
+    LOGGER.info(f"Loading config from: {args.config}")
+    cfg = load_config(args.config)
+    
+    # Apply Overrides
+    if args.batch_size:
+        LOGGER.info(f"CLI Override: Setting Batch Size to {args.batch_size}")
+        if "supcon" in cfg: cfg["supcon"]["batch_size"] = args.batch_size
+        if "dataset" in cfg: cfg["dataset"]["batch_size"] = args.batch_size
+        if "arcface" in cfg and "dataset" in cfg["arcface"]: cfg["arcface"]["dataset"]["batch_size"] = args.batch_size
+        
+        # Also need to override kwargs passed to create_garbage_loader if they pull from config...
+        # run_arcface_phase lines 89+ pull from cfg["dataset"] so modifying it here works!
+
+    # We need a slightly modified run_pipeline that accepts the CFG object instead of reloading it.
+    # Refactoring run_pipeline to accept cfg OR path.
+    
+    # ...Actually, let's just patch run_pipeline to not reload if we pass None, 
+    # but run_pipeline signature is (config_path, phases).
+    
+    # Simpler approach: Just define the phases loop here or refactor run_pipeline.
+    # Let's refactor run_pipeline slightly to take cfg dict optionally.
+    
+    # REFACTORING run_pipeline to take cfg directly
+    # See below for implementation
+    
+    phase_map = {
+        "supcon": lambda: run_supcon_phase(cfg),
+        "arcface": lambda: run_arcface_phase(cfg, args.resume),
+        "distill": lambda: run_distill_phase(cfg),
+        "evaluate": lambda: run_evaluation_phase(cfg),
+        "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
+    }
+
+    for phase in args.phases:
+        runner = phase_map.get(phase.lower())
+        if runner is None:
+            LOGGER.warning("Unknown phase '%s', skipping.", phase)
+            continue
+        try:
+            runner()
+        except Exception as e:
+            LOGGER.error(f"Phase {phase} failed: {e}")
+            import traceback
+            LOGGER.error(traceback.format_exc())
+            raise
+

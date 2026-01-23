@@ -248,6 +248,10 @@ class HybridBackbone(nn.Module):
         self.cbam = None
         self.mixstyle_module = None
         
+        if self.use_cbam:
+            self._inject_cbam_interleaved()
+        
+
         # Auto-detect dimensions using dummy input
         with torch.no_grad():
             dummy = torch.zeros(1, 3, 224, 224)
@@ -270,12 +274,7 @@ class HybridBackbone(nn.Module):
         LOGGER.info(f"HybridBackbone Dimensions Detected -> CNN: {self.cnn_dim}, ViT: {self.vit_dim}")
 
         # Now instantiate modules dependent on dimensions
-        if self.use_cbam:
-            # CBAM operates on intermediate features (before head), so use num_features
-            # If num_features is missing (unlikely), fallback to detected cnn_dim (might fail if they differ)
-            cbam_dim = getattr(self.cnn_backbone, "num_features", self.cnn_dim)
-            self.cbam = CBAM(cbam_dim)
-            LOGGER.info(f"CBAM initialized with channels: {cbam_dim}")
+
             
         if self.cfg.mixstyle:
             self.mixstyle_module = MixStyle(p=self.cfg.mixstyle_p, alpha=self.cfg.mixstyle_alpha)
@@ -291,6 +290,92 @@ class HybridBackbone(nn.Module):
             nn.ReLU(inplace=True),
             nn.BatchNorm1d(self.cfg.fusion_dim),
         )
+
+
+
+    def _inject_cbam_interleaved(self):
+        """
+        Injects CBAM blocks between stages/blocks of the CNN backbone.
+        Supports MobileNetV3 (timm) and ResNet (timm).
+        """
+        model = self.cnn_backbone
+        dummy = torch.zeros(1, 3, 224, 224)
+        
+        # --- MobileNetV3 Support ---
+        if hasattr(model, 'blocks') and isinstance(model.blocks, nn.Sequential):
+            LOGGER.info("Detected MobileNetV3-style backbone. Injecting Interleaved CBAM...")
+            
+            # 1. Run Stem
+            try:
+                with torch.no_grad():
+                    x = model.conv_stem(dummy)
+                    x = model.bn1(x)
+                    if hasattr(model, 'act1'):
+                        x = model.act1(x)
+                    elif hasattr(model, 'act'):
+                        x = model.act(x)
+                    else:
+                        LOGGER.warning("No activation found in stem (checked act1, act). Skipping.")
+            except Exception as e:
+                LOGGER.error(f"Error in Stem Forward: {e}. Available: {dir(model)}")
+                raise e
+            
+            new_blocks = nn.Sequential()
+            
+            for i, block in enumerate(model.blocks):
+                # Run block to get output shape
+                with torch.no_grad():
+                    x = block(x)
+                
+                # Add block to new sequential
+                new_blocks.add_module(f"block_{i}", block)
+                
+                # Check for NaNs/Issues? No, just shape.
+                channels = x.size(1)
+                
+                # Create and Add CBAM
+                # Use reduction=4 for lighter overhead on small models if desired, but 8 is standard
+                cbam = CBAM(channels, reduction_ratio=4) 
+                new_blocks.add_module(f"cbam_{i}", cbam)
+                
+            model.blocks = new_blocks
+            LOGGER.info(f"Successfully injected {len(model.blocks)//2} CBAM modules into MobileNetV3 blocks.")
+            return
+
+        # --- ResNet Support ---
+        # Iterate over layer1, layer2, layer3, layer4
+        layers = ['layer1', 'layer2', 'layer3', 'layer4']
+        if all(hasattr(model, l) for l in layers):
+             LOGGER.info("Detected ResNet-style backbone. Injecting Interleaved CBAM...")
+             with torch.no_grad():
+                 x = model.conv1(dummy)
+                 x = model.bn1(x)
+                 x = model.act1(x)
+                 x = model.maxpool(x)
+             
+             for l_name in layers:
+                 layer_container = getattr(model, l_name)
+                 
+                 # It's usually a Sequential of Blocks. We can inject between them or just at end of stage.
+                 # User asked "between every two conv layers" -> effectively "between blocks".
+                 new_layer = nn.Sequential()
+                 
+                 for i, block in enumerate(layer_container):
+                     with torch.no_grad():
+                         x = block(x)
+                     
+                     new_layer.add_module(f"block_{i}", block)
+                     cbam = CBAM(x.size(1), reduction_ratio=8)
+                     new_layer.add_module(f"cbam_{i}", cbam)
+                     
+                 setattr(model, l_name, new_layer)
+             
+             LOGGER.info("Successfully injected CBAM modules into ResNet layers.")
+             return
+             
+        LOGGER.warning("Could not detect supported structure for Interleaved CBAM. Falling back to single CBAM at end.")
+        self.cnn_dims = self._detect_cnn_dims()
+        self.cbam = CBAM(self.cnn_dims) # Fallback to old behavior
 
     def _cnn_features(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.cnn_backbone.forward_features(x)

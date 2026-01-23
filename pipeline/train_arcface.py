@@ -121,7 +121,29 @@ class ArcFaceTrainer:
         self.trainable_params = params
         
         # Optimizer Selection
-        base_optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
+        # Optimizer Selection with Differential Learning Rates
+        main_params = []
+        cbam_params = []
+        head_params = []
+        
+        for name, param in self.backbone.named_parameters():
+            if not param.requires_grad: continue
+            if "cbam" in name or "se_module" in name:
+                cbam_params.append(param)
+            else:
+                main_params.append(param)
+        
+        for param in self.head.parameters():
+            if param.requires_grad:
+                head_params.append(param)
+                
+        grouped_params = [
+            {"params": main_params, "lr": self.cfg.lr * 0.1},
+            {"params": cbam_params, "lr": self.cfg.lr * 10.0},
+            {"params": head_params, "lr": self.cfg.lr}, # Head learns at normal rate
+        ]
+        
+        base_optimizer = torch.optim.AdamW(grouped_params, lr=self.cfg.lr, weight_decay=1e-4)
         
         if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam: # Assuming use_sam flag, or add it to config
              # SAM requires a closure, handled in train loop.

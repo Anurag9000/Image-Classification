@@ -56,7 +56,27 @@ class SupConPretrainer:
         self.loss_fn = SupConLoss(temperature=self.cfg.temperature).to(self.device)
 
         # Optimizer Selection
-        base_optimizer = torch.optim.AdamW(self.model.parameters(), lr=self.cfg.lr, weight_decay=1e-4)
+        # Optimizer Selection with Differential Learning Rates
+        # User Request: CBAM weighted higher (shifts more), Conv weighted lower (shifts less)
+        
+        main_params = []
+        cbam_params = []
+        
+        for name, param in self.model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if "cbam" in name or "se_module" in name: # MobileNetV3 SE blocks are effectively attention
+                cbam_params.append(param)
+            else:
+                main_params.append(param)
+                
+        # Group params
+        grouped_params = [
+            {"params": main_params, "lr": self.cfg.lr * 0.1}, # Backbone shifts slower
+            {"params": cbam_params, "lr": self.cfg.lr * 10.0}, # CBAM/Attention shifts faster
+        ]
+        
+        base_optimizer = torch.optim.AdamW(grouped_params, lr=self.cfg.lr, weight_decay=1e-4) # Base LR unused if groups set, but good fallback
 
         if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam:
              self.sam = SAM(self.model.parameters(), base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
@@ -71,6 +91,8 @@ class SupConPretrainer:
             self.sam.base_optimizer = apply_gradient_centralization(self.sam.base_optimizer)
         else:
             self.optimizer = apply_gradient_centralization(self.optimizer)
+        
+        print("[DEBUG] Optimizer Initialized.", flush=True)
 
         if hasattr(self.cfg, 'use_lookahead') and self.cfg.use_lookahead:
             self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
@@ -120,13 +142,17 @@ class SupConPretrainer:
         self.model.train()
         step = 0
         data_iter = iter(self.train_loader)
+        LOGGER.info("[DEBUG] Data Iterator Created. Entering Loop...")
 
         while step < self.cfg.steps:
             if self.cfg.max_steps and step >= self.cfg.max_steps:
                 break
             try:
+                LOGGER.info(f"[TRACE] Step {step}: Requesting next batch...")
                 images, labels = next(data_iter)
+                LOGGER.info(f"[TRACE] Step {step}: Batch Loaded.")
             except StopIteration:
+                LOGGER.info("[DEBUG] Iterator exhausted. Resetting...")
                 data_iter = iter(self.train_loader)
                 images, labels = next(data_iter)
 
@@ -135,6 +161,7 @@ class SupConPretrainer:
             images = images.view(-1, 3, self.cfg.image_size, self.cfg.image_size).to(self.device)
             # Create expanded labels: each source label repeated num_views times
             expanded_labels = labels.view(-1, 1).repeat(1, self.cfg.num_views).view(-1).to(self.device)
+            LOGGER.info(f"[TRACE] Step {step}: Data moved to GPU.")
 
             # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
             with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
@@ -195,9 +222,8 @@ class SupConPretrainer:
             #      import gc
             #      gc.collect()
 
-            # Heartbeat
-            if step % 50 == 0:
-                 print(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})", flush=True)
+                if step % 10 == 0:
+                     LOGGER.info(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})")
             
             # Optional: Automatic recovery from OOM could go here
             # try: ... except RuntimeError: ...

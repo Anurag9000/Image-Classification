@@ -1,0 +1,59 @@
+project_name: "Garbage_Classification_Tiny_Direct"
+experiment_name: "MobileNetV3_Direct_NoDistill"
+
+# Data Config
+dataset:
+  root_dirs:
+    - "./data"
+  json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
+  batch_size: 64
+  num_workers: 0 # Windows Safety
+  val_split: 0.1
+  test_split: 0.1
+  augment_online: false
+
+# -------------------------------------------------------------------------
+# Main Backbone (Replaced ResNet18 with MobileNetV3)
+# -------------------------------------------------------------------------
+backbone: 
+  cnn_model: "mobilenetv3_large_100" # Tiny model
+  vit_model: null 
+  pretrained: true
+  use_cbam: false # Keep it simple/fast
+
+embedding_size: 512
+num_classes: 4
+
+# -------------------------------------------------------------------------
+# Phase 1: SupCon (Directly on Tiny Model)
+# -------------------------------------------------------------------------
+supcon:
+  enabled: true
+  epochs: 100 # Reduced for temporary test
+  batch_size: 64
+  num_views: 2
+  lr: 1.0e-3
+  steps: 5000 
+  use_sam: false
+  early_stopping_patience: 20
+  snapshot_path: "./snapshots_tiny/supcon_final.pth"
+
+# -------------------------------------------------------------------------
+# Phase 2: ArcFace (Directly on Tiny Model)
+# -------------------------------------------------------------------------
+arcface:
+  enabled: true
+  epochs: 20
+  lr: 1.0e-3
+  snapshot_dir: "./snapshots_tiny"
+  early_stopping_patience: 10
+  use_amp: true 
+  use_curricularface: false
+  use_sam: false
+  
+# -------------------------------------------------------------------------
+# Phase 3: Distillation (SKIPPED)
+# -------------------------------------------------------------------------
+distill:
+  enabled: false # Explicitly Disabled
+  epochs: 0
