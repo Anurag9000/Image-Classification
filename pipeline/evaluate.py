@@ -100,9 +100,10 @@ class Evaluator:
     def _compute_topk(self, probs: torch.Tensor, labels: torch.Tensor, ks: Iterable[int]) -> dict:
         metrics = {}
         for k in ks:
-            if probs.size(1) < k:
+            real_k = min(k, probs.size(1))
+            if real_k < 1:
                 continue
-            topk = torch.topk(probs, k=k, dim=1).indices
+            topk = torch.topk(probs, k=real_k, dim=1).indices
             correct = topk.eq(labels.view(-1, 1)).any(dim=1).float().mean().item()
             metrics[f"top{k}"] = correct
         return metrics
@@ -289,14 +290,18 @@ class Evaluator:
         if self.cfg.compute_vim:
             try:
                 centered = feats - feats.mean(dim=0, keepdim=True)
-                q = min(64, centered.size(1))
-                _, _, v = torch.pca_lowrank(centered, q=q)
-                residual = centered - centered @ v @ v.t()
-                vim_scores = residual.norm(dim=1).cpu().numpy()
-                metrics["vim_score_mean"] = float(np.mean(vim_scores))
-                metrics["vim_score_std"] = float(np.std(vim_scores))
-                self._save_vector_csv("vim_scores.csv", vim_scores)
-            except RuntimeError as exc:
+                # Adaptive rank selection for PCA
+                q = min(64, centered.size(1), centered.size(0) - 1)
+                if q > 0:
+                    _, _, v = torch.pca_lowrank(centered, q=q)
+                    residual = centered - centered @ v @ v.t()
+                    vim_scores = residual.norm(dim=1).cpu().numpy()
+                    metrics["vim_score_mean"] = float(np.mean(vim_scores))
+                    metrics["vim_score_std"] = float(np.std(vim_scores))
+                    self._save_vector_csv("vim_scores.csv", vim_scores)
+                else:
+                    LOGGER.warning("Not enough samples/features for ViM PCA.")
+            except Exception as exc: # Catch all PCA-related errors
                 LOGGER.warning("ViM computation failed: %s", exc)
 
     def _save_vector_csv(self, filename: str, values):

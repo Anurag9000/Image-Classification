@@ -129,7 +129,11 @@ def main():
 
     if os.path.exists(DEST_ROOT):
         LOGGER.info(f"Cleaning existing destination: {DEST_ROOT}")
-        shutil.rmtree(DEST_ROOT)
+        try:
+            shutil.rmtree(DEST_ROOT)
+        except Exception as e:
+            LOGGER.warning(f"Initial cleanup failed: {e}. Retrying with error ignore...")
+            shutil.rmtree(DEST_ROOT, ignore_errors=True)
     
     ensure_dir(DEST_ROOT)
     for cls in CLASSES:

@@ -454,8 +454,12 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
     LOGGER.info(f"TTA Evaluation F1 Score (Macro): {f1:.4f}")
 
 
+<<<<<<< HEAD
 def run_pipeline(config_path: str, phases: List[str], resume_path: str = None) -> None:
 
+=======
+def run_pipeline(config_path: str, phases: List[str], resume_path: str = None, batch_size: int = None, patience: int = None) -> None:
+>>>>>>> 1c6f001 (Exhaustive Fix - Phase 4 Core Infrastructure and Robustness Enhancements)
     # Auto-generate unique log file
     import datetime
     os.makedirs("./logs", exist_ok=True)
@@ -464,7 +468,12 @@ def run_pipeline(config_path: str, phases: List[str], resume_path: str = None) -
     print(f"Logging to: {os.path.abspath(log_file)}")
     
     setup_logger(log_file)
+<<<<<<< HEAD
     
+=======
+    setup_global_logging_redirection()
+
+>>>>>>> 1c6f001 (Exhaustive Fix - Phase 4 Core Infrastructure and Robustness Enhancements)
     LOGGER.info(f"Loading config from: {config_path}")
     cfg = load_config(config_path)
 
@@ -510,6 +519,7 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     
+<<<<<<< HEAD
     # Pre-load config to modify it, or modify run_pipeline to accept overrides?
     # Better to modify execution flow here.
     
@@ -574,4 +584,14 @@ if __name__ == "__main__":
             import traceback
             LOGGER.error(traceback.format_exc())
             raise
+=======
+    # All logging and overrides are now handled inside run_pipeline for better encapsulation
+    run_pipeline(
+        config_path=args.config, 
+        phases=args.phases, 
+        resume_path=args.resume, 
+        batch_size=args.batch_size, 
+        patience=args.patience
+    )
+>>>>>>> 1c6f001 (Exhaustive Fix - Phase 4 Core Infrastructure and Robustness Enhancements)
 

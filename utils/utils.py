@@ -160,3 +160,19 @@ class EarlyStopping:
         
         self.val_loss_min = val_loss
 
+    def state_dict(self):
+        return {
+            "counter": self.counter,
+            "best_score": self.best_score,
+            "val_loss_min": self.val_loss_min,
+            "early_stop": self.early_stop
+        }
+
+    def load_state_dict(self, state_dict):
+        if not state_dict:
+            return
+        self.counter = state_dict.get("counter", 0)
+        self.best_score = state_dict.get("best_score")
+        self.val_loss_min = state_dict.get("val_loss_min", float("inf"))
+        self.early_stop = state_dict.get("early_stop", False)
+

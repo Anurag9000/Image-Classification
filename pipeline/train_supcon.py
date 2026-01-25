@@ -112,6 +112,20 @@ class SupConPretrainer:
             path=self.cfg.snapshot_path.replace(".pth", "_best.pth")
         )
 
+        self.start_step = 0
+        if hasattr(self.cfg, 'resume_from') and self.cfg.resume_from and os.path.exists(self.cfg.resume_from):
+            LOGGER.info(f"RESUMING SUPCON from {self.cfg.resume_from}")
+            ckpt = torch.load(self.cfg.resume_from, map_location=self.device)
+            self.model.load_state_dict(ckpt['model_state_dict'])
+            if 'optimizer_state_dict' in ckpt:
+                self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            if 'scheduler_state_dict' in ckpt:
+                 self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+            if 'early_stop_state_dict' in ckpt:
+                 self.early_stopper.load_state_dict(ckpt['early_stop_state_dict'])
+            self.start_step = ckpt.get('step', 0)
+            LOGGER.info(f"Successfully resumed SupCon at Step {self.start_step}")
+
         os.makedirs(os.path.dirname(self.cfg.snapshot_path), exist_ok=True)
 
     def _validate(self) -> float:
@@ -140,7 +154,7 @@ class SupConPretrainer:
 
     def train(self):
         self.model.train()
-        step = 0
+        step = self.start_step
         data_iter = iter(self.train_loader)
         LOGGER.info("[DEBUG] Data Iterator Created. Entering Loop...")
 
@@ -222,8 +236,8 @@ class SupConPretrainer:
             #      import gc
             #      gc.collect()
 
-                if step % 10 == 0:
-                     LOGGER.info(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})")
+            if step % 10 == 0:
+                 LOGGER.info(f"[HEARTBEAT-SUPCON] Step {step}/{self.cfg.steps} (Loss: {loss.item():.4f})")
             
             # Optional: Automatic recovery from OOM could go here
             # try: ... except RuntimeError: ...
@@ -246,8 +260,15 @@ class SupConPretrainer:
                      # torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
     
                      # Early Stopping check
-                     if self.early_stopper:
-                          self.early_stopper(val_loss, {"model_state_dict": self.model.state_dict()})
+                    if self.early_stopper:
+                        checkpoint_data = {
+                            "step": step,
+                            "model_state_dict": self.model.state_dict(),
+                            "optimizer_state_dict": self.optimizer.state_dict(),
+                            "scheduler_state_dict": self.scheduler.state_dict(),
+                            "early_stop_state_dict": self.early_stopper.state_dict() if hasattr(self.early_stopper, 'state_dict') else None
+                        }
+                        self.early_stopper(val_loss, checkpoint_data)
                           patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
                           
                           if self.early_stopper.early_stop:

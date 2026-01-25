@@ -58,6 +58,20 @@ class GradCAM:
         gradients = self.gradients
         activations = self.activations
 
+        # Handle ViT 3D output (B, N, C) -> (B, C, H, W)
+        if activations.dim() == 3:
+             b, n, c = activations.shape
+             h = w = int(np.sqrt(n))
+             # If n is not a perfect square (contains CLS token), skip CLS
+             if h * w != n:
+                 activations = activations[:, 1:]
+                 gradients = gradients[:, 1:]
+                 n = n - 1
+                 h = w = int(np.sqrt(n))
+             
+             activations = activations.transpose(1, 2).reshape(b, c, h, w)
+             gradients = gradients.transpose(1, 2).reshape(b, c, h, w)
+
         if self.mode == "gradcam":
             weights = gradients.mean(dim=(2, 3), keepdim=True)
             cam = (weights * activations).sum(dim=1, keepdim=True)
@@ -73,9 +87,15 @@ class GradCAM:
 
         cam = F.relu(cam)
         cam = F.interpolate(cam, size=input_tensor.shape[2:], mode='bilinear', align_corners=False)
-        cam = cam.squeeze().cpu().numpy()
-        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
-        return cam 
+        # Batch-aware squeezing
+        cam = cam.squeeze(1).cpu().numpy() # Resulting (B, H, W)
+        
+        # Min-max norm per image in batch
+        for i in range(cam.shape[0]):
+            c_min, c_max = cam[i].min(), cam[i].max()
+            cam[i] = (cam[i] - c_min) / (c_max - c_min + 1e-8)
+        
+        return cam[0] if cam.shape[0] == 1 else cam 
 
     def overlay_heatmap(self, cam, image, output_path):
         """

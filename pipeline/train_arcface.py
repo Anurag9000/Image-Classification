@@ -208,13 +208,20 @@ class ArcFaceTrainer:
                 if 'optimizer_state_dict' in ckpt:
                     self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
                 
+                if 'scheduler_state_dict' in ckpt:
+                    self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+
+                if 'early_stop_state_dict' in ckpt:
+                    self.early_stopper.load_state_dict(ckpt['early_stop_state_dict'])
+                
                 self.start_epoch = ckpt.get('epoch', 1)
                 self.step_resumed = ckpt.get('step', 0)
                 
                 LOGGER.info(f"Successfully resumed from Epoch {self.start_epoch}, Step {self.step_resumed}")
             except Exception as e:
                 LOGGER.error(f"Failed to resume from checkpoint: {e}")
-                raise e
+                # Don't raise, just warn and start fresh if it's just a state dict mismatch
+                LOGGER.warning("Continuing with fresh optimizer/scheduler states.")
 
         # self.wandb_run = init_wandb(self.cfg.wandb)
         self.wandb_run = None # Force disable for debugging hangs
@@ -480,10 +487,16 @@ class ArcFaceTrainer:
 
             # Early Stopping and Checkpointing
             # Save both backbone and head for complete restoration/distillation
-            self.early_stopper(val_loss, {
-                'model_state_dict': self.backbone.state_dict(),
-                'head_state_dict': self.head.state_dict()
-            })
+            checkpoint_data = {
+                'epoch': epoch + 1,
+                'step': step_count,
+                'backbone_state_dict': self.backbone.state_dict(),
+                'head_state_dict': self.head.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'scheduler_state_dict': self.scheduler.state_dict(),
+                'early_stop_state_dict': self.early_stopper.state_dict() if hasattr(self.early_stopper, 'state_dict') else None
+            }
+            self.early_stopper(val_loss, checkpoint_data)
             if self.early_stopper.early_stop:
                 LOGGER.info("Early stopping triggered.")
                 break

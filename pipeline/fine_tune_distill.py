@@ -180,6 +180,23 @@ class FineTuneDistillTrainer:
         self.head_ema = ModelEMA(self.head, decay=self.cfg.ema_decay) if self.cfg.ema_decay else None
         self.manifold_mixup_enabled = self.cfg.use_manifold_mixup
         self.wandb_run = init_wandb(self.cfg.wandb)
+        
+        self.start_epoch = 1
+        self.step_resumed = 0
+        if hasattr(self.cfg, "resume_from") and self.cfg.resume_from and os.path.exists(self.cfg.resume_from):
+            LOGGER.info(f"RESUMING DISTILLATION from {self.cfg.resume_from}")
+            ckpt = torch.load(self.cfg.resume_from, map_location=self.device)
+            self.backbone.load_state_dict(ckpt['backbone_state_dict'])
+            self.head.load_state_dict(ckpt['head_state_dict'])
+            if 'optimizer_state_dict' in ckpt:
+                self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+            if 'scheduler_state_dict' in ckpt:
+                self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
+            if 'early_stop_state_dict' in ckpt:
+                self.early_stopper.load_state_dict(ckpt['early_stop_state_dict'])
+            self.start_epoch = ckpt.get('epoch', 1)
+            self.step_resumed = ckpt.get('step', 0)
+            LOGGER.info(f"Successfully resumed at Epoch {self.start_epoch}")
 
         with open(self.cfg.log_csv, "w", newline="") as f:
             csv.writer(f).writerow(["epoch", "train_loss", "train_acc", "train_f1"])
@@ -228,7 +245,7 @@ class FineTuneDistillTrainer:
         hard_loss = lam * self.criterion(student_logits, y_a) + (1 - lam) * self.criterion(student_logits, y_b)
         soft_loss = self.kldiv(
             F.log_softmax(student_logits / self.cfg.temperature, dim=1),
-            teacher_soft,
+            teacher_soft, 
         ) * (self.cfg.temperature**2)
         
         projected_student_features = self.feature_proj(student_features)
@@ -311,10 +328,10 @@ class FineTuneDistillTrainer:
         self.backbone.train()
         self.head.train()
 
-        for epoch in range(1, self.cfg.epochs + 1):
+        step_count = self.step_resumed
+        for epoch in range(self.start_epoch, self.cfg.epochs + 1):
             epoch_losses = []
             preds_all, labels_all = [], []
-            step_count = 0
 
             for images, labels in self.train_loader:
                 step_count += 1
@@ -454,7 +471,16 @@ class FineTuneDistillTrainer:
                     "distill/teacher_val_acc": teacher_val_acc
                 }, step=epoch)
 
-            self.early_stopper(val_loss, self.backbone) # Saving backbone is enough, typically
+            checkpoint_data = {
+                'epoch': epoch + 1,
+                'step': step_count,
+                'backbone_state_dict': self.backbone.state_dict(),
+                'head_state_dict': self.head.state_dict(),
+                'optimizer_state_dict': self.optimizer.state_dict(),
+                'scheduler_state_dict': self.scheduler.state_dict(),
+                'early_stop_state_dict': self.early_stopper.state_dict() if hasattr(self.early_stopper, 'state_dict') else None
+            }
+            self.early_stopper(val_loss, checkpoint_data)
             if self.early_stopper.early_stop:
                 LOGGER.info("Early stopping triggered")
                 break

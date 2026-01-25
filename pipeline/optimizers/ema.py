@@ -47,7 +47,7 @@ class ModelEMA:
 
         if not self.skip_buffers:
             for ema_buffer, model_buffer in zip(self.ema_model.buffers(), model.buffers()):
-                ema_buffer.copy_(model_buffer)
+                ema_buffer.copy_(model_buffer.detach().to(ema_buffer.device))
 
     def to(self, device: torch.device):
         self.ema_model.to(device)
