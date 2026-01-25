@@ -122,15 +122,15 @@ if __name__ == "__main__":
 
 
 class EarlyStopping:
-    def __init__(self, patience: int = 5, min_delta: float = 0.0, path: str = "checkpoint.pth", verbose: bool = False):
+    def __init__(self, patience: int = 5, min_delta: float = 0.0, path: str = "checkpoint.pth", verbose: bool = False, best_score: Optional[float] = None):
         self.patience = patience
         self.min_delta = min_delta
         self.path = path
         self.verbose = verbose
         self.counter = 0
-        self.best_score = None
+        self.best_score = best_score
         self.early_stop = False
-        self.val_loss_min = float("inf")
+        self.val_loss_min = -best_score if best_score is not None else float("inf")
 
     def __call__(self, val_loss: float, model: torch.nn.Module):
         score = -val_loss

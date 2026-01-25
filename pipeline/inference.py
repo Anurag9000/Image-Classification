@@ -107,6 +107,31 @@ def run_inference(
         writer = csv.writer(f)
         writer.writerow(["filename", "prediction", "confidence"])
 
+        # Initializing GradCAM outside the loop for efficiency
+        target_layer = None
+        cnn = model.cnn_backbone
+        # Detect suitable layer for GradCAM
+        if hasattr(cnn, "stages"): # ConvNeXt
+            target_layer = cnn.stages[-1][-1]
+        elif hasattr(cnn, "layer4"): # ResNet
+            target_layer = cnn.layer4[-1]
+        elif hasattr(cnn, "blocks"): # Some ViTs/other CNNs
+            target_layer = cnn.blocks[-1]
+        
+        cam = None
+        if gradcam_dir and target_layer:
+            class ModelWrapper(torch.nn.Module):
+                def __init__(self, bb, h):
+                    super().__init__()
+                    self.bb = bb
+                    self.h = h
+                def forward(self, x):
+                    return self.h(self.bb(x))
+            
+            wrapper = ModelWrapper(model, head)
+            cam = GradCAM(wrapper, target_layer, mode="gradcam++")
+            LOGGER.info("GradCAM initialized successfully.")
+
         for image_path in image_paths:
             tensor = get_image_tensor(image_path, device=device)
             pred, conf = predict(tensor, model, head)
@@ -114,40 +139,12 @@ def run_inference(
             writer.writerow([os.path.basename(image_path), pred, f"{conf:.4f}"])
             LOGGER.info(f"{os.path.basename(image_path)} => class {pred}, conf {conf:.4f}")
 
-            if gradcam_dir:
-                target_layer = None
-                cnn = model.cnn_backbone
-                if hasattr(cnn, "stages"): # ConvNeXt
-                    target_layer = cnn.stages[-1][-1]
-                elif hasattr(cnn, "layer4"): # ResNet
-                    target_layer = cnn.layer4[-1]
-                elif hasattr(cnn, "blocks"): # Some ViTs/other CNNs
-                    target_layer = cnn.blocks[-1]
-                
-                if target_layer:
-                    # GradCAM requires logits, but 'model' only outputs features.
-                    # We must wrap them.
-                    class ModelWrapper(torch.nn.Module):
-                        def __init__(self, bb, h):
-                            super().__init__()
-                            self.bb = bb
-                            self.h = h
-                        def forward(self, x):
-                            return self.h(self.bb(x))
-                    
-                    wrapper = ModelWrapper(model, head)
-                    # We need to point GradCAM to the backbone INSIDE the wrapper
-                    # GradCAM registers hooks on 'target_layer'. 
-                    # target_layer is already an object reference to a layer in 'model'.
-                    # Even if 'model' is inside wrapper, target_layer object is same.
-                    # So hooks will work.
-                    
-                    cam = GradCAM(wrapper, target_layer, mode="gradcam++")
-                    heatmap = cam.generate(tensor)
-                    cam.overlay_heatmap(heatmap, tensor[0], os.path.join(gradcam_dir, os.path.basename(image_path)))
-                    cam.remove_hooks()
-                else:
-                    LOGGER.warning(f"Could not identify target layer for GradCAM on {type(cnn)}")
+            if cam:
+                heatmap = cam.generate(tensor)
+                cam.overlay_heatmap(heatmap, tensor[0], os.path.join(gradcam_dir, os.path.basename(image_path)))
+        
+        if cam:
+            cam.remove_hooks()
 
 
 def parse_args() -> argparse.Namespace:

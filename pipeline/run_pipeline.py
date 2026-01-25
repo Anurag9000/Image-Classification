@@ -68,10 +68,9 @@ def run_supcon_phase(full_cfg: dict) -> None:
 
     LOGGER.info("===> Starting SupCon Pretraining Phase")
     
-    # Extract json_path from global dataset config
-    json_path = None
-    if "dataset" in full_cfg and "json_path" in full_cfg["dataset"]:
-        json_path = full_cfg["dataset"]["json_path"]
+    # Extract json_path and root_dirs from global dataset config
+    json_path = full_cfg.get("dataset", {}).get("json_path", None)
+    root_dirs = full_cfg.get("dataset", {}).get("root_dirs", ["./data"])
 
     # Use global backbone if not in supcon config
     backbone_cfg = cfg.get("backbone", full_cfg.get("backbone", {}))
@@ -83,7 +82,7 @@ def run_supcon_phase(full_cfg: dict) -> None:
         batch_size=cfg.get("batch_size", 16),
         image_size=cfg.get("image_size", 224),
         augmentations=cfg.get("augmentations"),
-        root=cfg.get("data_root", "./data"),
+        root=cfg.get("data_root", root_dirs[0] if isinstance(root_dirs, list) else root_dirs),
         num_workers=cfg.get("num_workers", 0),
         json_path=json_path,
         num_views=num_views 
@@ -454,25 +453,28 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
     LOGGER.info(f"TTA Evaluation F1 Score (Macro): {f1:.4f}")
 
 
-def run_pipeline(config_path: str, phases: List[str], resume_path: str = None) -> None:
-
-    # Auto-generate unique log file
-    import datetime
-    os.makedirs("./logs", exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"./logs/pipeline_{timestamp}.log"
-    print(f"Logging to: {os.path.abspath(log_file)}")
-    
-    setup_logger(log_file)
-    
+def run_pipeline(config_path: str, phases: List[str], resume_path: str = None, batch_size: int = None, patience: int = None) -> None:
+    # ... (logging setup) ...
     LOGGER.info(f"Loading config from: {config_path}")
     cfg = load_config(config_path)
 
+    if batch_size:
+        LOGGER.info(f"CLI Override: Setting Batch Size to {batch_size}")
+        if "supcon" in cfg: cfg["supcon"]["batch_size"] = batch_size
+        if "dataset" in cfg: cfg["dataset"]["batch_size"] = batch_size
+        if "arcface" in cfg and "dataset" in cfg["arcface"]: cfg["arcface"]["dataset"]["batch_size"] = batch_size
+    
+    if patience:
+        LOGGER.info(f"CLI Override: Setting Early Stopping Patience to {patience}")
+        if "supcon" in cfg: cfg["supcon"]["early_stopping_patience"] = patience
+        if "arcface" in cfg: cfg["arcface"]["early_stopping_patience"] = patience
+        if "distill" in cfg: cfg["distill"]["early_stopping_patience"] = patience
+
     phase_map = {
-        "supcon": lambda: run_supcon_phase(cfg), # Pass FULL config to access dataset/backbone
-        "arcface": lambda: run_arcface_phase(cfg, resume_path), # Pass resume_path explicitly
-        "distill": lambda: run_distill_phase(cfg), # Pass full cfg to access global backbone for teacher
-        "evaluate": lambda: run_evaluation_phase(cfg), # Pass FULL config to access global props
+        "supcon": lambda: run_supcon_phase(cfg),
+        "arcface": lambda: run_arcface_phase(cfg, resume_path),
+        "distill": lambda: run_distill_phase(cfg),
+        "evaluate": lambda: run_evaluation_phase(cfg),
         "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
     }
 
@@ -554,24 +556,6 @@ if __name__ == "__main__":
     # REFACTORING run_pipeline to take cfg directly
     # See below for implementation
     
-    phase_map = {
-        "supcon": lambda: run_supcon_phase(cfg),
-        "arcface": lambda: run_arcface_phase(cfg, args.resume),
-        "distill": lambda: run_distill_phase(cfg),
-        "evaluate": lambda: run_evaluation_phase(cfg),
-        "tta": lambda: evaluate_with_tta(cfg, cfg.get("arcface", {}).get("snapshot_dir", "./snapshots")),
-    }
-
-    for phase in args.phases:
-        runner = phase_map.get(phase.lower())
-        if runner is None:
-            LOGGER.warning("Unknown phase '%s', skipping.", phase)
-            continue
-        try:
-            runner()
-        except Exception as e:
-            LOGGER.error(f"Phase {phase} failed: {e}")
-            import traceback
-            LOGGER.error(traceback.format_exc())
-            raise
+    # run_pipeline handles logging setup and phase execution
+    run_pipeline(args.config, args.phases, args.resume, batch_size=args.batch_size, patience=args.patience)
 
