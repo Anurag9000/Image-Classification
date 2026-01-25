@@ -57,6 +57,7 @@ class DistillConfig:
     use_lookahead: bool = False
     lookahead_k: int = 5
     lookahead_alpha: float = 0.5
+    val_limit_batches: int = 100
 
 class FineTuneDistillTrainer:
     def __init__(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, config: Optional[DistillConfig] = None):
@@ -158,7 +159,11 @@ class FineTuneDistillTrainer:
             self.optimizer = Lookahead(self.optimizer, k=self.cfg.lookahead_k, alpha=self.cfg.lookahead_alpha)
             LOGGER.info(f"Using Lookahead Optimizer (k={self.cfg.lookahead_k}, alpha={self.cfg.lookahead_alpha})")
 
-        total_steps = self.cfg.epochs * len(self.train_loader)
+        if self.cfg.max_steps and self.cfg.max_steps > 0:
+            total_steps = self.cfg.epochs * min(len(self.train_loader), self.cfg.max_steps)
+        else:
+            total_steps = self.cfg.epochs * len(self.train_loader)
+
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer if not self.sam else self.sam.base_optimizer,
             max_lr=self.cfg.lr * 2,
@@ -288,7 +293,7 @@ class FineTuneDistillTrainer:
         all_labels = []
 
         with torch.no_grad():
-            limit_batches = 50
+            limit_batches = getattr(self.cfg, "val_limit_batches", 100) # Increased default and made configurable
             for i, (images, labels) in enumerate(self.val_loader):
                 if limit_batches and i >= limit_batches:
                     break
@@ -378,7 +383,7 @@ class FineTuneDistillTrainer:
                     self.scaler.unscale_(self.sam.base_optimizer)
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     
-                    self.sam.second_step(zero_grad=True)
+                    self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
                     self.scaler.update()
 
                 elif self.cfg.use_amp:
@@ -502,13 +507,13 @@ def create_distill_loader(
     json_path: Optional[str] = None,
     augment_online: bool = True
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
     # Just like ArcFace, unify data loading
     # Check if root is a list or string 
     root_dirs = [root] if isinstance(root, str) else root
     
-    train_loader, val_loader, _ = create_garbage_loader(
+    train_loader, val_loader, _ = create_data_loader(
         root_dirs=root_dirs,
         batch_size=batch_size,
         num_workers=num_workers,

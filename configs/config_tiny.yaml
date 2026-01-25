@@ -1,4 +1,4 @@
-project_name: "Garbage_Classification_Tiny_Direct"
+project_name: "Image_Classification_Tiny_Direct"
 experiment_name: "MobileNetV3_Direct_NoDistill"
 
 # Data Config

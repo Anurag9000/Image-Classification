@@ -286,7 +286,7 @@ class HybridBackbone(nn.Module):
         if self.cfg.mixstyle:
             self.mixstyle_module = MixStyle(p=self.cfg.mixstyle_p, alpha=self.cfg.mixstyle_alpha)
 
-        self.token_learner = None
+        # self.token_learner already initialized to None at start
         if self.cfg.token_learner_tokens and self.cfg.vit_model:
             self.token_learner = TokenLearner(self.vit_dim, self.cfg.token_learner_tokens)
 
@@ -386,8 +386,7 @@ class HybridBackbone(nn.Module):
              return
              
         LOGGER.warning("Could not detect supported structure for Interleaved CBAM. Falling back to single CBAM at end.")
-        self.cnn_dims = self._detect_cnn_dims()
-        self.cbam = CBAM(self.cnn_dims) # Fallback to old behavior
+        self.cbam = CBAM(self.cnn_dim) # Fallback using autodetected dim
 
     def _cnn_features(self, x: torch.Tensor) -> torch.Tensor:
         feat = self.cnn_backbone.forward_features(x)

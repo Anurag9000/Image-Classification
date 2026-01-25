@@ -215,9 +215,9 @@ def build_eval_transform(config: Optional[Dict] = None, image_size: int = 224):
 
 
 # ------------------------------
-# Garbage Classification Specific Transforms
+# Advanced / Default Classification Transforms
 # ------------------------------
-def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
+def get_advanced_transforms(is_training: bool = True, img_size: int = 224):
     """
     Returns Albumentations transforms.
     Includes robust augmentations for training: Warp, Morph, etc.
@@ -242,12 +242,13 @@ def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
         ])
 
 
-def get_heavy_transforms(img_size: int = 224):
+def get_heavy_transforms(img_size: int = 224, return_tensor: bool = True):
     """
     Returns the heavy augmentation pipeline (V4).
     Simulates severe degradation: heavy morphing, noise, blur, damaging.
+    :param return_tensor: If True, adds Normalize and ToTensorV2. If False, returns uint8 numpy image.
     """
-    return A.Compose([
+    transforms_list = [
         A.Resize(img_size, img_size),
         
         # 1. GEOMETRIC TRANSFORMS
@@ -293,10 +294,15 @@ def get_heavy_transforms(img_size: int = 224):
             A.ToGray(p=1.0),
         ], p=0.8),
         
-        # Final Norm
-        A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
-        ToTensorV2()
-    ])
+    ]
+    
+    if return_tensor:
+        transforms_list.extend([
+            A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+            ToTensorV2()
+        ])
+        
+    return A.Compose(transforms_list)
 
 
 if __name__ == "__main__":

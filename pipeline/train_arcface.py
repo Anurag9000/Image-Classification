@@ -420,7 +420,7 @@ class ArcFaceTrainer:
                     if self.cfg.grad_clip_norm:
                         torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
                     
-                    self.sam.second_step(zero_grad=True)
+                    self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
                     self.scaler.update()
 
                 elif self.cfg.use_amp:
@@ -453,20 +453,14 @@ class ArcFaceTrainer:
                 with open(self.step_log_csv, 'a', newline='') as f:
                     csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
 
-                # 2. Save "Latest" model every 100 steps (Optimized IO)
-                # DISABLED: Speculated cause of Windows Hangs (File Locking/IO blocking)
-                # if step_count % 100 == 0:
-                #    torch.save({...}, ...)
-                # -------------------------------------------------------------------------
+                # 2. Save "Latest" model every 100 steps
+                # (Disabled to prevent Windows file locking/hangs)
 
             # End of Epoch
             avg_train_loss = np.mean([l.item() for l in epoch_losses]) if epoch_losses else 0.0
             val_loss, val_acc, val_f1 = self._validate()
             
-            # Explicit Garbage Collection for Windows
-            # Explicit Garbage Collection for Windows
-            # torch.cuda.empty_cache() 
-            # import gc
+            # Explicit Garbage Collection (Optional/Debug)
             # gc.collect()
 
             LOGGER.info(
@@ -523,12 +517,12 @@ def create_dataloader(
     num_workers: int = 4,
     val_split: float = 0.1,
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
-    # Check if root is a list or string (create_garbage_loader expects list)
+    # Check if root is a list or string (create_data_loader expects list)
     root_dirs = [root] if isinstance(root, str) else root
     
-    train_loader, val_loader, _ = create_garbage_loader(
+    train_loader, val_loader, _ = create_data_loader(
         root_dirs=root_dirs,
         batch_size=batch_size,
         num_workers=num_workers,

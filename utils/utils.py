@@ -63,8 +63,18 @@ def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, fi
     checkpoint = torch.load(filename, map_location=device)
     
     # Robust loading: check for various possible keys
-    state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict") or checkpoint.get("backbone") or (checkpoint if isinstance(checkpoint, dict) and not any(k in checkpoint for k in ["model_state_dict", "state_dict"]) else None)
-    
+    if isinstance(checkpoint, dict):
+        state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict") or checkpoint.get("backbone")
+        if not state_dict:
+            # Maybe the checkpoint IS the state dict
+            # Heuristic: check if keys look like layer names (strings)
+            if all(isinstance(k, str) for k in checkpoint.keys()):
+                state_dict = checkpoint
+            else:
+                state_dict = None
+    else:
+        state_dict = None
+
     if state_dict:
         model.load_state_dict(state_dict, strict=False)
     else:
@@ -137,15 +147,15 @@ if __name__ == "__main__":
 
 
 class EarlyStopping:
-    def __init__(self, patience: int = 5, min_delta: float = 0.0, path: str = "checkpoint.pth", verbose: bool = False):
+    def __init__(self, patience: int = 5, min_delta: float = 0.0, path: str = "checkpoint.pth", verbose: bool = False, best_score: Optional[float] = None):
         self.patience = patience
         self.min_delta = min_delta
         self.path = path
         self.verbose = verbose
         self.counter = 0
-        self.best_score = None
+        self.best_score = best_score
         self.early_stop = False
-        self.val_loss_min = float("inf")
+        self.val_loss_min = -best_score if best_score is not None else float("inf")
 
     def __call__(self, val_loss: float, model: torch.nn.Module):
         score = -val_loss

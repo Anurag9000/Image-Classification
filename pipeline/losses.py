@@ -26,10 +26,8 @@ class AdaFace(nn.Module):
         # Fix: Force float32 for metric learning to prevent NaN in AMP
         embeddings = embeddings.float()
         if hasattr(self, "weight"):
-             self.weight.data = self.weight.data.float() # Ensure weight is float32? usually auto-handled 
-        
-        # Manually casting weight to float for calculation
-        weight = self.weight.float()
+             # Use the casted weight for calculation without modifying the parameter in-place
+             weight = self.weight.float()
 
         cosine = F.linear(F.normalize(embeddings), F.normalize(weight))
         if labels is None:

@@ -8,7 +8,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset
 from typing import List, Optional, Callable
-from .augmentations import get_garbage_transforms
+from .augmentations import get_advanced_transforms
 import logging
 
 LOGGER = logging.getLogger(__name__)
@@ -50,25 +50,22 @@ class JsonDataset(Dataset):
         
         image = cv2.imread(img_path)
         if image is None:
-<<<<<<< HEAD
-            # Placeholder or skip? For training, raising error is better to catch issues.
-            # But might be annoying if one image is corrupt.
-            raise FileNotFoundError(f"Image not found: {img_path}")
-
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-=======
-            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning random noise image to avoid collapse.")
-            # Random noise is better than black for batch norm statistics
-            image = np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8)
+            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning blank image.")
+            # Return blank image (black) instead of noise to avoid training on garbage
+            image = np.zeros((224, 224, 3), dtype=np.uint8)
         else:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
->>>>>>> cd12893 (Deep Scrub Fixes: Robustness, Memory Safety, and Logic Optimization)
 
         if self.transform:
             augmented = self.transform(image=image)
             image = augmented['image']
         else:
-             image = A.Compose([A.Resize(224, 224), ToTensorV2()])(image=image)['image']
+             # Standard normalization must be applied even in fallback
+             image = A.Compose([
+                 A.Resize(224, 224), 
+                 A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                 ToTensorV2()
+             ])(image=image)['image']
 
         return image, label
 
@@ -145,30 +142,27 @@ class CombinedFilesDataset(Dataset):
         # Read image
         image = cv2.imread(img_path)
         if image is None:
-<<<<<<< HEAD
-            # Handle missing image gracefully-ish (or error out)
-            raise FileNotFoundError(f"Image not found: {img_path}")
-            
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-=======
-            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning random noise image.")
-            image = np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8)
+            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning blank image.")
+            image = np.zeros((224, 224, 3), dtype=np.uint8)
         else:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
->>>>>>> cd12893 (Deep Scrub Fixes: Robustness, Memory Safety, and Logic Optimization)
 
         if self.transform:
             augmented = self.transform(image=image)
             image = augmented['image']
         else:
-            # Default to basic tensor conversion if no transforms provided
-            image = A.Compose([A.Resize(224, 224), ToTensorV2()])(image=image)['image']
+            # Standard normalization must be applied even in fallback
+            image = A.Compose([
+                A.Resize(224, 224), 
+                A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
+                ToTensorV2()
+            ])(image=image)['image']
 
         return image, label
 
 
 
-def create_garbage_loader(
+def create_data_loader(
     root_dirs: List[str], 
     batch_size: int, 
     num_workers: int = 2, 
@@ -183,8 +177,8 @@ def create_garbage_loader(
     Otherwise uses CombinedFilesDataset (folder structure with CSVs).
     """
     # If augment_online is False, use VALIDATION transforms (Resize+Norm) for training too.
-    train_transform = get_garbage_transforms(is_training=augment_online)
-    val_transform = get_garbage_transforms(is_training=False)
+    train_transform = get_advanced_transforms(is_training=augment_online)
+    val_transform = get_advanced_transforms(is_training=False)
     
     test_loader = None
     
@@ -264,7 +258,9 @@ def create_garbage_loader(
     else:
         # CSV/Folder Mode
         # Check if 'valid' exists in the first root as a heuristic
-        has_valid_folder = os.path.exists(os.path.join(root_dirs[0], 'valid'))
+        has_valid_folder = False
+        if root_dirs and len(root_dirs) > 0 and os.path.exists(os.path.join(root_dirs[0], 'valid')):
+             has_valid_folder = True
         
         if has_valid_folder:
             train_dataset = CombinedFilesDataset(root_dirs, split='train', transform=train_transform)
@@ -276,6 +272,10 @@ def create_garbage_loader(
                 test_dataset = None
         else:
             # Fallback: Load 'train' and split it
+            # WARN: This path assumes CombinedFilesDataset handles the split? No, it loads 'train' folder.
+            # If no 'valid' folder exists, we might need to split 'train' manually?
+            # But CombinedFilesDataset implementation above loads explicit 'split'.
+            LOGGER.info("No 'valid' folder found, using 'train' folder for everything (this might be wrong if you wanted validation).")
             full_dataset = CombinedFilesDataset(root_dirs, split='train', transform=train_transform)
             train_dataset = full_dataset
             val_dataset = None 
@@ -330,8 +330,8 @@ def create_garbage_loader(
 
     return train_loader, val_loader, test_loader
 
-def create_garbage_test_loader(root_dirs: List[str], batch_size: int, num_workers: int = 2, json_path: str = None):
-    transform = get_garbage_transforms(is_training=False)
+def create_test_loader(root_dirs: List[str], batch_size: int, num_workers: int = 2, json_path: str = None):
+    transform = get_advanced_transforms(is_training=False)
     if json_path:
         data_root = root_dirs[0] if root_dirs else "./data"
         # For test, we might need a separate test json or just use same dataset class?
@@ -344,3 +344,4 @@ def create_garbage_test_loader(root_dirs: List[str], batch_size: int, num_worker
         dataset, batch_size=batch_size, shuffle=False, 
         num_workers=num_workers, pin_memory=True
     )
+
