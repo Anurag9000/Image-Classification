@@ -53,10 +53,12 @@ class MixStyle(nn.Module):
         mu_shuffle = mu[idx]
         sigma_shuffle = sigma[idx]
 
-        lam = self._beta.sample((b, 1, 1)).to(x.device)
-
-        mu_mix = lam * mu + (1 - lam) * mu_shuffle
-        sigma_mix = lam * sigma + (1 - lam) * sigma_shuffle
+        # Use beta from torch to sample on device if possible, or just sample once per batch
+        # distributions.Beta is CPU bound usually.
+        lam = np.random.beta(self.alpha, self.alpha)
+        
+        mu_mix = lam * mu + (1.0 - lam) * mu_shuffle
+        sigma_mix = lam * sigma + (1.0 - lam) * sigma_shuffle
 
         x_norm = (x - mu) / sigma
         mixed = x_norm * sigma_mix + mu_mix
@@ -310,12 +312,17 @@ class HybridBackbone(nn.Module):
                 with torch.no_grad():
                     x = model.conv_stem(dummy)
                     x = model.bn1(x)
+                    # Support for various timm model activation names in stem
                     if hasattr(model, 'act1'):
                         x = model.act1(x)
                     elif hasattr(model, 'act'):
                         x = model.act(x)
                     else:
-                        LOGGER.warning("No activation found in stem (checked act1, act). Skipping.")
+                        # Inspect model to find any activation in the first few submodules
+                        for sub_m in list(model.modules())[:10]:
+                             if any(act_type in str(type(sub_m)).lower() for act_type in ['relu', 'silu', 'gelu', 'hardswish']):
+                                 x = sub_m(x)
+                                 break
             except Exception as e:
                 LOGGER.error(f"Error in Stem Forward: {e}. Available: {dir(model)}")
                 raise e

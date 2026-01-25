@@ -33,12 +33,14 @@ def build_trial_configs(trial: optuna.Trial) -> Dict:
         "vit_model": "swinv2_base_window12_192_22k", # trial.suggest_categorical("vit_model", ["swinv2_base_window12_192_22k", ...])
         "token_merging_ratio": None if token_merging_ratio == 0.0 else token_merging_ratio,
         "token_learner_tokens": None if token_learner_tokens == 0 else token_learner_tokens,
-        "lora_rank": None if lora_rank == 0 else lora_rank,
+        "cnn_lora_rank": None if lora_rank == 0 else lora_rank,
+        "vit_lora_rank": None if lora_rank == 0 else lora_rank,
         "lora_alpha": 16,
         "mixstyle": mixstyle,
         "mixstyle_p": 0.4,
         "mixstyle_alpha": 0.1,
-        "use_ia3": trial.suggest_categorical("use_ia3", [True, False]),
+        "cnn_ia3": trial.suggest_categorical("use_ia3_cnn", [True, False]),
+        "vit_ia3": trial.suggest_categorical("use_ia3_vit", [True, False]),
         "cnn_drop_path_rate": trial.suggest_float("cnn_drop_path_rate", 0.0, 0.15),
         "vit_drop_path_rate": trial.suggest_float("vit_drop_path_rate", 0.1, 0.4),
     }
@@ -125,11 +127,17 @@ def objective(trial: optuna.Trial, root_dirs: list[str], num_classes: int) -> fl
             
         parts = last_line.strip().split(",")
         # New format: epoch, train_loss, val_loss, val_acc, val_f1
-        if len(parts) >= 5:
-             val_f1 = float(parts[4])
-             return val_f1
+        if len(parts) >= 2:
+             # Find f1 column by header
+             header = lines[0].strip().split(",")
+             if "val_f1" in header:
+                 idx = header.index("val_f1")
+                 return float(parts[idx])
+             else:
+                 # Fallback to last column if val_f1 not found
+                 return float(parts[-1])
         else:
-             logging.warning("CSV format mismatch: %s", last_line)
+             logging.warning("CSV format mismatch or no data: %s", last_line)
              return 0.0
              
     except Exception as exc:

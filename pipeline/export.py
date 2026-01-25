@@ -100,11 +100,15 @@ def parse_args() -> argparse.Namespace:
 def _parse_cfg(cfg: Optional[str]) -> Optional[dict]:
     if not cfg:
         return None
-    cfg_path = Path(cfg)
-    if cfg_path.exists():
-        with cfg_path.open("r", encoding="utf-8") as f:
-            return json.load(f)
-    return json.loads(cfg)
+    try:
+        cfg_path = Path(cfg)
+        if cfg_path.exists():
+            with cfg_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        return json.loads(cfg)
+    except Exception as e:
+        LOGGER.error(f"Failed to parse config string/file: {e}")
+        return None
 
 
 def main():

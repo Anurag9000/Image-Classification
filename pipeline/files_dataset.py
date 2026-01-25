@@ -243,7 +243,10 @@ def create_data_loader(
         # Shuffle again to mix classes in the final lists (optional but good for batches)
         # Actually DataLoader shuffles, so not strictly needed, but good for sanity
         
-        full_metadata = None # Free memory
+        # Optimization: Explicitly clear the large raw metadata list
+        del full_metadata
+        import gc
+        gc.collect()
 
         train_dataset = JsonDataset(train_meta, data_root, transform=train_transform)
         val_dataset = JsonDataset(val_meta, data_root, transform=val_transform)
@@ -307,7 +310,8 @@ def create_data_loader(
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, 
         sampler=sampler, # Replaces shuffle=True
-        num_workers=num_workers, pin_memory=True
+        num_workers=num_workers, pin_memory=True,
+        drop_last=True # Better for stable batch sizes during training
     )
     
     val_loader = None

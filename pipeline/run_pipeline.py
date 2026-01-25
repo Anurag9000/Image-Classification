@@ -454,7 +454,16 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
 
 
 def run_pipeline(config_path: str, phases: List[str], resume_path: str = None, batch_size: int = None, patience: int = None) -> None:
-    # ... (logging setup) ...
+    # Auto-generate unique log file
+    import datetime
+    os.makedirs("./logs", exist_ok=True)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = f"./logs/pipeline_{timestamp}.log"
+    print(f"Logging to: {os.path.abspath(log_file)}")
+    
+    setup_logger(log_file)
+    setup_global_logging_redirection()
+
     LOGGER.info(f"Loading config from: {config_path}")
     cfg = load_config(config_path)
 
@@ -512,50 +521,12 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     
-    # Pre-load config to modify it, or modify run_pipeline to accept overrides?
-    # Better to modify execution flow here.
-    
-    # 1. Setup rudimentary logging to stdout first? No, run_pipeline sets it up.
-    # We need to setup logger FIRST to capture everything.
-    import datetime
-    os.makedirs("./logs", exist_ok=True)
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = f"./logs/pipeline_{timestamp}.log"
-    print(f"Logging to: {os.path.abspath(log_file)}")
-    setup_logger(log_file)
-    setup_global_logging_redirection()
-    
-    LOGGER.info(f"Loading config from: {args.config}")
-    cfg = load_config(args.config)
-    
-    # Apply Overrides
-    if args.batch_size:
-        LOGGER.info(f"CLI Override: Setting Batch Size to {args.batch_size}")
-        if "supcon" in cfg: cfg["supcon"]["batch_size"] = args.batch_size
-        if "dataset" in cfg: cfg["dataset"]["batch_size"] = args.batch_size
-        if "arcface" in cfg and "dataset" in cfg["arcface"]: cfg["arcface"]["dataset"]["batch_size"] = args.batch_size
-        
-        # Also need to override kwargs passed to create_data_loader if they pull from config...
-        # run_arcface_phase lines 89+ pull from cfg["dataset"] so modifying it here works!
-
-    if args.patience:
-        LOGGER.info(f"CLI Override: Setting Early Stopping Patience to {args.patience}")
-        if "supcon" in cfg: cfg["supcon"]["early_stopping_patience"] = args.patience
-        # Arcface config keys might differ, let's ensure it's propagated
-        if "arcface" in cfg: cfg["arcface"]["early_stopping_patience"] = args.patience
-
-    # We need a slightly modified run_pipeline that accepts the CFG object instead of reloading it.
-    # Refactoring run_pipeline to accept cfg OR path.
-    
-    # ...Actually, let's just patch run_pipeline to not reload if we pass None, 
-    # but run_pipeline signature is (config_path, phases).
-    
-    # Simpler approach: Just define the phases loop here or refactor run_pipeline.
-    # Let's refactor run_pipeline slightly to take cfg dict optionally.
-    
-    # REFACTORING run_pipeline to take cfg directly
-    # See below for implementation
-    
-    # run_pipeline handles logging setup and phase execution
-    run_pipeline(args.config, args.phases, args.resume, batch_size=args.batch_size, patience=args.patience)
+    # All logging and overrides are now handled inside run_pipeline for better encapsulation
+    run_pipeline(
+        config_path=args.config, 
+        phases=args.phases, 
+        resume_path=args.resume, 
+        batch_size=args.batch_size, 
+        patience=args.patience
+    )
 
