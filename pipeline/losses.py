@@ -51,6 +51,10 @@ class AdaFace(nn.Module):
         target_logit = torch.cos(theta + adaptive_m.view(-1, 1))
 
         one_hot = torch.zeros_like(cosine)
+        if labels.max() >= one_hot.size(1) or labels.min() < 0:
+             # Gracefully handle invalid labels by ignoring them (masking) or raising clearer error
+             # Raising error is better for debugging training data issues
+             raise ValueError(f"Label index out of range in AdaFace: max {labels.max()} vs valid {one_hot.size(1)}")
         one_hot.scatter_(1, labels.view(-1, 1), 1)
 
         output = cosine * (1 - one_hot) + target_logit * one_hot
@@ -83,6 +87,8 @@ class CurricularFace(nn.Module):
         target_cos = torch.cos(theta + self.m)
 
         one_hot = torch.zeros_like(cosine)
+        if labels.max() >= one_hot.size(1) or labels.min() < 0:
+             raise ValueError(f"Label index out of range in CurricularFace: max {labels.max()} vs valid {one_hot.size(1)}")
         one_hot.scatter_(1, labels.view(-1, 1), 1)
 
         hard_mask = cosine > target_cos

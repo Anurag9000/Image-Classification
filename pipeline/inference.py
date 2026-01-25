@@ -28,6 +28,9 @@ def load_model(
     backbone_cfg: Optional[dict] = None,
 ) -> Tuple[torch.nn.Module, torch.nn.Module]:
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if backbone_cfg is None:
+        LOGGER.warning("No backbone_cfg provided! Using DEFAULT HybridBackbone config. "
+                       "If your model architecture differs (e.g. different ViT/CNN), loading will FAIL.")
     config = BackboneConfig(**(backbone_cfg or {}))
     model = HybridBackbone(config).to(device).eval()
     head = AdaFace(config.fusion_dim, num_classes).to(device).eval()
