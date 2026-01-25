@@ -194,7 +194,10 @@ class FineTuneDistillTrainer:
             self.backbone.load_state_dict(ckpt['backbone_state_dict'])
             self.head.load_state_dict(ckpt['head_state_dict'])
             if 'optimizer_state_dict' in ckpt:
-                self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+                try:
+                    self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+                except Exception as e:
+                    LOGGER.warning(f"Could not load optimizer state: {e}. Starting fresh.")
             if 'scheduler_state_dict' in ckpt:
                 self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
             if 'early_stop_state_dict' in ckpt:
