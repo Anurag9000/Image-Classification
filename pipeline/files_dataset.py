@@ -50,8 +50,9 @@ class JsonDataset(Dataset):
         
         image = cv2.imread(img_path)
         if image is None:
-            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning dummy image.")
-            image = np.zeros((224, 224, 3), dtype=np.uint8)
+            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning random noise image to avoid collapse.")
+            # Random noise is better than black for batch norm statistics
+            image = np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8)
         else:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
@@ -141,8 +142,8 @@ class CombinedFilesDataset(Dataset):
         # Read image
         image = cv2.imread(img_path)
         if image is None:
-            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning dummy image.")
-            image = np.zeros((224, 224, 3), dtype=np.uint8)
+            LOGGER.error(f"Image not found or corrupt: {img_path}. Returning random noise image.")
+            image = np.random.randint(0, 256, (224, 224, 3), dtype=np.uint8)
         else:
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
