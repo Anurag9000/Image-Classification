@@ -7,7 +7,7 @@ import numpy as np
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from torch.utils.data import Dataset
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Union
 from .augmentations import get_advanced_transforms
 import logging
 
@@ -18,7 +18,7 @@ class JsonDataset(Dataset):
     Dataset that reads from a JSON metadata file.
     Expected JSON format: List of dicts with 'file_path' and 'label'.
     """
-    def __init__(self, json_path: str | List[dict], root_dir: str, transform: Optional[A.Compose] = None):
+    def __init__(self, json_path: Union[str, List[dict]], root_dir: str, transform: Optional[A.Compose] = None):
         self.root_dir = root_dir
         self.transform = transform
         
