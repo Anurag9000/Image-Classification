@@ -3,13 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, Sequence, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm import create_model
 
 from .adapters import IA3Config, LoRAConfig, inject_ia3, inject_lora
-from utils import apply_token_merging
+from utils.utils import apply_token_merging
 
 import logging
 LOGGER = logging.getLogger(__name__)

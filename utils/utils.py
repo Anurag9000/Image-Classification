@@ -11,6 +11,8 @@ from typing import Any, Dict, Optional
 
 import torch
 
+LOGGER = logging.getLogger(__name__)
+
 
 def setup_logger(log_file: str) -> None:
     log_dir = os.path.dirname(log_file)
