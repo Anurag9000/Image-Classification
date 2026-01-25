@@ -162,7 +162,9 @@ class Evaluator:
             if feature_bank is not None:
                 with torch.no_grad():
                     base_features = model(images)
-                feature_bank.append(base_features.detach().cpu())
+                # Cap feature bank size to prevent OOM on large datasets
+                if len(feature_bank) * images.size(0) < 50000:
+                    feature_bank.append(base_features.detach().cpu())
 
         probs_concat = torch.cat(probs_list)
         logits_concat = torch.cat(logits_list)

@@ -206,7 +206,10 @@ class ArcFaceTrainer:
                 
                 # Load optimizer/states
                 if 'optimizer_state_dict' in ckpt:
-                    self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+                    try:
+                        self.optimizer.load_state_dict(ckpt['optimizer_state_dict'])
+                    except Exception as opt_e:
+                        LOGGER.warning(f"Could not load optimizer state (might be incompatible): {opt_e}. Starting with fresh optimizer.")
                 
                 if 'scheduler_state_dict' in ckpt:
                     self.scheduler.load_state_dict(ckpt['scheduler_state_dict'])
@@ -265,7 +268,8 @@ class ArcFaceTrainer:
         all_labels = []
 
         with torch.no_grad():
-            limit_batches = 50 # Optimization for frequent checks
+            # limit_batches = 50 # Removed hard limit for exhaustive validation accuracy
+            limit_batches = getattr(self.cfg, "val_limit_batches", None) 
             for i, (images, labels) in enumerate(self.val_loader):
                 if limit_batches and i >= limit_batches:
                     break

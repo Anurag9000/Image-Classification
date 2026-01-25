@@ -143,6 +143,9 @@ def objective(trial: optuna.Trial, root_dirs: list[str], num_classes: int) -> fl
     except Exception as exc:
         logging.error("Failed to parse metrics for trial %s: %s", trial.number, exc)
         return 0.0
+    except FileNotFoundError:
+        logging.warning("Log CSV not found for trial %s (Training likely failed early).", trial.number)
+        return 0.0
 
 
 def main():

@@ -32,6 +32,21 @@ def setup_logger(log_file: str) -> None:
     file_handler = logging.FileHandler(log_file)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+    
+    # Ensure no handlers are duplicated if called multiple times in same process
+    unique_handlers = []
+    seen_files = set()
+    for h in logger.handlers:
+        if isinstance(h, logging.FileHandler):
+            abs_path = os.path.abspath(h.baseFilename)
+            if abs_path not in seen_files:
+                unique_handlers.append(h)
+                seen_files.add(abs_path)
+        else:
+             # De-duplicate StreamHandlers too? Usually we need one.
+             if not any(isinstance(uh, logging.StreamHandler) for uh in unique_handlers) or not isinstance(h, logging.StreamHandler):
+                 unique_handlers.append(h)
+    logger.handlers = unique_handlers
 
 
 def save_checkpoint(state: dict, filename: str = "checkpoint.pth") -> None:

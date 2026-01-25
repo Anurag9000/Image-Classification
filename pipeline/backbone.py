@@ -28,8 +28,13 @@ class TokenLearner(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x: (B, N, C)
         attn = self.attention(x)  # (B, N, K)
-        return torch.einsum("bnk,bnc->bkc", attn, x)
+        # Optimized replacement for einsum "bnk,bnc->bkc"
+        # B, N, K -> B, K, N
+        attn = attn.transpose(1, 2)
+        # (B, K, N) @ (B, N, C) -> (B, K, C)
+        return torch.matmul(attn, x)
 
 
 class MixStyle(nn.Module):
@@ -131,11 +136,11 @@ class BackboneConfig:
     # Shared Adaptation Params
     lora_alpha: int = 16
     lora_train_base: bool = False
-    lora_target_modules: Tuple[str, ...] = field(
-        default_factory=lambda: ("qkv", "kv", "proj", "fc", "mlp")
+    lora_target_modules: list[str] = field(
+        default_factory=lambda: ["qkv", "kv", "proj", "fc", "mlp"]
     )
-    ia3_target_modules: Tuple[str, ...] = field(
-        default_factory=lambda: ("qkv", "kv", "proj", "fc", "mlp")
+    ia3_target_modules: list[str] = field(
+        default_factory=lambda: ["qkv", "kv", "proj", "fc", "mlp"]
     )
     
     cnn_drop_path_rate: float = 0.0
