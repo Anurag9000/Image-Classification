@@ -18,7 +18,7 @@ from .augmentations import mixup_cutmix_tokenmix
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import AdaFace, EvidentialLoss, FocalLoss
 from .optimizers import Lookahead, ModelEMA, SAM, apply_gradient_centralization
-from utils import init_wandb, save_snapshot, EarlyStopping
+from utils.utils import init_wandb, save_snapshot, EarlyStopping
 
 LOGGER = logging.getLogger(__name__)
 

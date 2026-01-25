@@ -27,7 +27,7 @@ from .optimizers import (
     SAM,
     apply_gradient_centralization,
 )
-from utils import init_wandb, save_snapshot, EarlyStopping
+from utils.utils import init_wandb, save_snapshot, EarlyStopping
 
 LOGGER = logging.getLogger(__name__)
 

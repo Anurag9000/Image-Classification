@@ -6,6 +6,9 @@ import logging
 
 import yaml
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+LOGGER = logging.getLogger(__name__)
+
 def create_dummy_ckpt():
     LOGGER.info("Creating dummy checkpoint...")
     

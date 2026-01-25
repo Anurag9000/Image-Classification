@@ -38,7 +38,7 @@ def augment_dataset(input_dir, output_dir, num_variations, metadata_file):
     LOGGER.info(f"Saving to: {output_path}")
     LOGGER.info(f"Variations per image: {num_variations}")
 
-    transform = get_garbage_transforms()
+    transform = get_advanced_transforms()
     metadata = []
     
     # Image extensions to look for

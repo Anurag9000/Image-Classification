@@ -47,7 +47,7 @@ from .fine_tune_distill import DistillConfig, FineTuneDistillTrainer, create_dis
 from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader as create_arcface_loader
 from .train_supcon import SupConConfig, SupConPretrainer, create_supcon_loader
 from pipeline.files_dataset import create_data_loader
-from utils import setup_logger
+from utils.utils import setup_logger
 
 LOGGER = logging.getLogger(__name__)
 

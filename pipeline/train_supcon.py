@@ -14,7 +14,7 @@ from torchvision import datasets
 from .backbone import BackboneConfig, HybridBackbone
 from .losses import SupConLoss
 from .optimizers import ModelEMA, SAM, apply_gradient_centralization
-from utils import save_snapshot
+from utils.utils import save_snapshot
 
 LOGGER = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class SupConConfig:
 
 class SupConPretrainer:
     def __init__(self, train_loader: DataLoader, val_loader: DataLoader = None, config: Optional[SupConConfig] = None):
-        from utils import EarlyStopping
+        from utils.utils import EarlyStopping
         
         self.cfg = config or SupConConfig()
         self.train_loader = train_loader
@@ -269,7 +269,7 @@ class SupConPretrainer:
                             "early_stop_state_dict": self.early_stopper.state_dict() if hasattr(self.early_stopper, 'state_dict') else None
                         }
                         self.early_stopper(val_loss, checkpoint_data)
-                          patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
+                        patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
                           
                           if self.early_stopper.early_stop:
                                LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
