@@ -271,10 +271,10 @@ class SupConPretrainer:
                         self.early_stopper(val_loss, checkpoint_data)
                         patience_str = f"{self.early_stopper.counter}/{self.early_stopper.patience}"
                           
-                          if self.early_stopper.early_stop:
-                               LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
-                               LOGGER.info("Early stopping triggered in SupCon Phase!")
-                               break
+                        if self.early_stopper.early_stop:
+                            LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str} [STOP TRIGGERED]")
+                            LOGGER.info("Early stopping triggered in SupCon Phase!")
+                            break
                 
                 # Combined Log Line
                 LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str}")
