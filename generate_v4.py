@@ -45,7 +45,8 @@ def generate_v4(config_path, output_root, num_variations):
     # Let's process 'train', 'valid', 'test' from sources and map them to v4 structure.
     
     splits = ['train', 'valid', 'test']
-    transform = get_heavy_transforms()
+    # Fix: Do not return tensors for image generation script (keep as uint8 numpy)
+    transform = get_heavy_transforms(return_tensor=False)
     
     total_generated = 0
 

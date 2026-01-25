@@ -453,20 +453,14 @@ class ArcFaceTrainer:
                 with open(self.step_log_csv, 'a', newline='') as f:
                     csv.writer(f).writerow([epoch, step_count, loss.item(), acc.item(), self.optimizer.param_groups[0]['lr']])
 
-                # 2. Save "Latest" model every 100 steps (Optimized IO)
-                # DISABLED: Speculated cause of Windows Hangs (File Locking/IO blocking)
-                # if step_count % 100 == 0:
-                #    torch.save({...}, ...)
-                # -------------------------------------------------------------------------
+                # 2. Save "Latest" model every 100 steps
+                # (Disabled to prevent Windows file locking/hangs)
 
             # End of Epoch
             avg_train_loss = np.mean([l.item() for l in epoch_losses]) if epoch_losses else 0.0
             val_loss, val_acc, val_f1 = self._validate()
             
-            # Explicit Garbage Collection for Windows
-            # Explicit Garbage Collection for Windows
-            # torch.cuda.empty_cache() 
-            # import gc
+            # Explicit Garbage Collection (Optional/Debug)
             # gc.collect()
 
             LOGGER.info(

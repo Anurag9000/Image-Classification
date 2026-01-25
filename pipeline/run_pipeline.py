@@ -352,10 +352,9 @@ def run_evaluation_phase(full_cfg: dict) -> None:
 
 def evaluate_with_tta(cfg: dict, snapshot_dir: str):
     """
-    Perform evaluation using Test Time Augmentation (TPA).
-    By default, it uses the 'test' split from the garbage loader.
+    By default, it uses the 'test' split.
     """
-    LOGGER.info("===> Starting TTA Evaluation")
+    LOGGER.info("===> Starting TTA (Test Time Augmentation) Evaluation")
     
     # Path logic
     project_name = cfg.get("project_name", "backbone")

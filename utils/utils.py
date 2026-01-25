@@ -63,8 +63,18 @@ def load_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, fi
     checkpoint = torch.load(filename, map_location=device)
     
     # Robust loading: check for various possible keys
-    state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict") or checkpoint.get("backbone") or (checkpoint if isinstance(checkpoint, dict) and not any(k in checkpoint for k in ["model_state_dict", "state_dict"]) else None)
-    
+    if isinstance(checkpoint, dict):
+        state_dict = checkpoint.get("model_state_dict") or checkpoint.get("state_dict") or checkpoint.get("backbone")
+        if not state_dict:
+            # Maybe the checkpoint IS the state dict
+            # Heuristic: check if keys look like layer names (strings)
+            if all(isinstance(k, str) for k in checkpoint.keys()):
+                state_dict = checkpoint
+            else:
+                state_dict = None
+    else:
+        state_dict = None
+
     if state_dict:
         model.load_state_dict(state_dict, strict=False)
     else:
