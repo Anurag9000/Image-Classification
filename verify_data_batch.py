@@ -1,7 +1,7 @@
 import torch
 import os
 import yaml
-from pipeline.files_dataset import create_garbage_loader
+from pipeline.files_dataset import create_data_loader
 import logging
 import sys
 
@@ -10,7 +10,7 @@ import argparse
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 LOGGER = logging.getLogger(__name__)
 
-def verify_data(config_path="configs/garbage_edge.yaml"):
+def verify_data(config_path="configs/config_edge.yaml"):
     LOGGER.info("=== Verifying Data Integrity ===")
     
     # Load config
@@ -27,7 +27,7 @@ def verify_data(config_path="configs/garbage_edge.yaml"):
     LOGGER.info(f"Using batch size: {batch_size}")
     
     try:
-        train_loader, _, _ = create_garbage_loader(
+        train_loader, _, _ = create_data_loader(
             root_dirs=dataset_cfg["root_dirs"],
             batch_size=batch_size,
             num_workers=0, # Debug on main thread
@@ -66,6 +66,6 @@ def verify_data(config_path="configs/garbage_edge.yaml"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/garbage_edge.yaml")
+    parser.add_argument("--config", default="configs/config_edge.yaml")
     args = parser.parse_args()
     verify_data(args.config)

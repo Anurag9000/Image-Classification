@@ -46,7 +46,7 @@ from .evaluate import EvaluationConfig, Evaluator
 from .fine_tune_distill import DistillConfig, FineTuneDistillTrainer, create_distill_loader
 from .train_arcface import ArcFaceConfig, ArcFaceTrainer, create_dataloader as create_arcface_loader
 from .train_supcon import SupConConfig, SupConPretrainer, create_supcon_loader
-from pipeline.files_dataset import create_garbage_loader
+from pipeline.files_dataset import create_data_loader
 from utils import setup_logger
 
 LOGGER = logging.getLogger(__name__)
@@ -113,7 +113,7 @@ def run_arcface_phase(cfg: dict, resume_path: str = None) -> None:
     
     if "dataset" in cfg and "root_dirs" in cfg["dataset"]:
         LOGGER.info(f"Using CombinedFilesDataset with roots: {cfg['dataset']['root_dirs']}")
-        train_loader, val_loader, test_loader = create_garbage_loader(
+        train_loader, val_loader, test_loader = create_data_loader(
             root_dirs=cfg["dataset"]["root_dirs"],
             batch_size=cfg["dataset"].get("batch_size", 32),
             num_workers=cfg["dataset"].get("num_workers", 4),
@@ -272,7 +272,7 @@ def run_evaluation_phase(full_cfg: dict) -> None:
     
     if "dataset" in full_cfg:
         LOGGER.info(f"Using CombinedFilesDataset/JsonDataset for Evaluation")
-        _, _, loader = create_garbage_loader(
+        _, _, loader = create_data_loader(
             root_dirs=full_cfg["dataset"]["root_dirs"],
             batch_size=cfg.get("batch_size", 32),
             num_workers=cfg.get("num_workers", 4),
@@ -411,7 +411,7 @@ def evaluate_with_tta(cfg: dict, snapshot_dir: str):
         LOGGER.error("Dataset configuration missing for TTA.")
         return
 
-    _, _, test_loader = create_garbage_loader(
+    _, _, test_loader = create_data_loader(
         root_dirs=cfg["dataset"].get("root_dirs", []),
         batch_size=cfg["dataset"].get("batch_size", 32),
         num_workers=cfg["dataset"].get("num_workers", 4),
@@ -533,7 +533,7 @@ if __name__ == "__main__":
         if "dataset" in cfg: cfg["dataset"]["batch_size"] = args.batch_size
         if "arcface" in cfg and "dataset" in cfg["arcface"]: cfg["arcface"]["dataset"]["batch_size"] = args.batch_size
         
-        # Also need to override kwargs passed to create_garbage_loader if they pull from config...
+        # Also need to override kwargs passed to create_data_loader if they pull from config...
         # run_arcface_phase lines 89+ pull from cfg["dataset"] so modifying it here works!
 
     if args.patience:

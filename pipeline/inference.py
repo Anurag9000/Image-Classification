@@ -58,8 +58,8 @@ def get_image_tensor(image_path: str, device: Optional[torch.device] = None, img
     device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Use EXACTLY the same transform pipeline as validation
-    from .augmentations import get_garbage_transforms
-    transform = get_garbage_transforms(is_training=False, img_size=img_size)
+    from .augmentations import get_advanced_transforms
+    transform = get_advanced_transforms(is_training=False, img_size=img_size)
     
     image = cv2.imread(image_path)
     if image is None:

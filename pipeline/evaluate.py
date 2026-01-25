@@ -315,12 +315,12 @@ class Evaluator:
 if __name__ == "__main__":
     # Example usage for testing
     from torchvision import transforms
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
     # Simple test run if executed directly
     logging.basicConfig(level=logging.INFO)
     try:
-         _, _, dataloader = create_garbage_loader(
+         _, _, dataloader = create_data_loader(
             root_dirs=["./data/Dataset_Final"],
             batch_size=32,
             test_split=1.0 # Use full for testing

@@ -9,7 +9,7 @@ from tqdm import tqdm
 # --- Configuration ---
 import argparse
 import logging
-from pipeline.augmentations import get_garbage_transforms
+from pipeline.augmentations import get_advanced_transforms
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 LOGGER = logging.getLogger(__name__)

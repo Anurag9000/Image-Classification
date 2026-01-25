@@ -215,12 +215,13 @@ def build_eval_transform(config: Optional[Dict] = None, image_size: int = 224):
 
 
 # ------------------------------
-# Garbage Classification Specific Transforms
+# Advanced / Default Classification Transforms
 # ------------------------------
-def get_garbage_transforms(is_training: bool = True, img_size: int = 224):
+def get_advanced_transforms(is_training: bool = True, img_size: int = 224):
     """
     Returns Albumentations transforms.
     Includes robust augmentations for training: Warp, Morph, etc.
+    Previously named 'garbage' transforms.
     """
     if is_training:
         return A.Compose([

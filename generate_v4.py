@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate V4 dataset with heavy augmentations.")
-    parser.add_argument("--config", default="configs/garbage_edge.yaml", help="Path to config file")
+    parser.add_argument("--config", default="configs/config_edge.yaml", help="Path to config file")
     parser.add_argument("--output", default="./data/Dataset_V4", help="Output directory")
     parser.add_argument("--variations", type=int, default=50, help="Number of variations per training image")
     return parser.parse_args()

@@ -409,7 +409,7 @@ class ArcFaceTrainer:
                     if self.cfg.grad_clip_norm:
                         torch.nn.utils.clip_grad_norm_(self.trainable_params, self.cfg.grad_clip_norm)
                     
-                    self.sam.second_step(zero_grad=True)
+                    self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
                     self.scaler.update()
 
                 elif self.cfg.use_amp:
@@ -506,12 +506,12 @@ def create_dataloader(
     num_workers: int = 4,
     val_split: float = 0.1,
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
-    # Check if root is a list or string (create_garbage_loader expects list)
+    # Check if root is a list or string (create_data_loader expects list)
     root_dirs = [root] if isinstance(root, str) else root
     
-    train_loader, val_loader, _ = create_garbage_loader(
+    train_loader, val_loader, _ = create_data_loader(
         root_dirs=root_dirs,
         batch_size=batch_size,
         num_workers=num_workers,

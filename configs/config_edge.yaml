@@ -1,4 +1,4 @@
-project_name: "Garbage_Classification_Edge_v1"
+project_name: "Image_Classification_Edge_v1"
 experiment_name: "Distill_ResNetSwin_to_MobileNet"
 
 # Data Config (Shared)

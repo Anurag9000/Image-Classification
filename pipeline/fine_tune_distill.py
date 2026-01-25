@@ -473,13 +473,13 @@ def create_distill_loader(
     json_path: Optional[str] = None,
     augment_online: bool = True
 ) -> tuple[DataLoader, Optional[DataLoader]]:
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
     # Just like ArcFace, unify data loading
     # Check if root is a list or string 
     root_dirs = [root] if isinstance(root, str) else root
     
-    train_loader, val_loader, _ = create_garbage_loader(
+    train_loader, val_loader, _ = create_data_loader(
         root_dirs=root_dirs,
         batch_size=batch_size,
         num_workers=num_workers,

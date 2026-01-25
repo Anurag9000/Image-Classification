@@ -10,7 +10,7 @@ def create_dummy_ckpt():
     LOGGER.info("Creating dummy checkpoint...")
     
     # 1. Load Real Config
-    config_path = "configs/garbage_edge.yaml"
+    config_path = "configs/config_edge.yaml"
     if not os.path.exists(config_path):
         LOGGER.warning(f"Config not found: {config_path}. Using hardcoded defaults.")
         # Fallback only if config is missing
@@ -21,8 +21,8 @@ def create_dummy_ckpt():
             cfg = yaml.safe_load(f)
         
         # We need the TEACHER config (Phase 1/2) if we are simulating the teacher.
-        # configs/garbage_edge.yaml top-level 'backbone' is the teacher ID (e.g. resnet50).
-        # configs/garbage_edge.yaml 'distill' section defines the student.
+        # configs/config_edge.yaml top-level 'backbone' is the teacher ID (e.g. resnet50).
+        # configs/config_edge.yaml 'distill' section defines the student.
         # But wait, create_checkpoint.py says "Match test_distill.yaml teacher expectations".
         # test_distill.yaml usually expects the teacher to be loaded.
         

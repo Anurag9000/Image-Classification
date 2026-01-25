@@ -77,9 +77,9 @@ def build_trial_configs(trial: optuna.Trial) -> Dict:
 def objective(trial: optuna.Trial, root_dirs: list[str], num_classes: int) -> float:
     trial_cfg = build_trial_configs(trial)
 
-    from .files_dataset import create_garbage_loader
+    from .files_dataset import create_data_loader
     
-    dataloader, val_loader, _ = create_garbage_loader(
+    dataloader, val_loader, _ = create_data_loader(
         root_dirs=root_dirs,
         batch_size=32,
         num_workers=4,

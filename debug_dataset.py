@@ -52,7 +52,7 @@ def debug_dataset(config_path):
         LOGGER.info(f"  {name}: {count} images")
 
 if __name__ == "__main__":
-    config_file = "configs/garbage_edge.yaml"
+    config_file = "configs/config_edge.yaml"
     if len(sys.argv) > 1:
         config_file = sys.argv[1]
     

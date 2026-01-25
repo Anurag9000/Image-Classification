@@ -279,7 +279,7 @@ class HybridBackbone(nn.Module):
         if self.cfg.mixstyle:
             self.mixstyle_module = MixStyle(p=self.cfg.mixstyle_p, alpha=self.cfg.mixstyle_alpha)
 
-        self.token_learner = None
+        # self.token_learner already initialized to None at start
         if self.cfg.token_learner_tokens and self.cfg.vit_model:
             self.token_learner = TokenLearner(self.vit_dim, self.cfg.token_learner_tokens)
 

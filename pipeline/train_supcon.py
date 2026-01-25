@@ -193,7 +193,7 @@ class SupConPretrainer:
                  self.scaler.unscale_(self.sam.base_optimizer)
                  torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
                  
-                 self.sam.second_step(zero_grad=True)
+                 self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
                  self.scaler.update()
 
             elif self.cfg.use_amp:
@@ -266,7 +266,7 @@ class SupConPretrainer:
 
 # Multi-View Dataset Logic
 from .files_dataset import JsonDataset
-from .augmentations import get_garbage_transforms
+from .augmentations import get_advanced_transforms
 
 # Custom Transform Wrapper for MultiView
 class MultiViewTransform:
@@ -303,7 +303,7 @@ def create_supcon_loader(
     json_path: Optional[str] = None,
     num_views: int = 2
 ) -> DataLoader:
-    # Use the shared garbage transforms but customized for Multi-View
+    # Use the shared advanced transforms but customized for Multi-View
     # Ideally SupCon needs specific TwoCropTransform.
     # For now, let's just use the robust training transform from files_dataset and apply it twice.
     import torch
@@ -315,13 +315,13 @@ def create_supcon_loader(
     else:
         root_dir = root
 
-    raw_transform = get_garbage_transforms(is_training=True, img_size=image_size)
+    raw_transform = get_advanced_transforms(is_training=True, img_size=image_size)
     
     # Use the global adapter class (pickleable)
     adapter = AlbumentationsMultiViewAdapter(raw_transform, num_views=num_views)
     
     if not json_path:
-        raise ValueError("SupCon requires json_path for Garbage dataset.")
+        raise ValueError("SupCon requires json_path for Dataset.")
 
     # Create dataset with MultiView Transform
     dataset = JsonDataset(json_path, root_dir=root_dir, transform=adapter)

@@ -1,4 +1,4 @@
-project_name: "Garbage_Classification_Cloud_v1"
+project_name: "Image_Classification_Cloud_v1"
 experiment_name: "ResNet50_SwinV2_SAM_EMA"
 
 # Data Config
