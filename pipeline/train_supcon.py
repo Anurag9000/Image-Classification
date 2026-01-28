@@ -248,19 +248,13 @@ class SupConPretrainer:
                 val_loss_str = "N/A"
                 patience_str = "N/A"
                 
+
                 if self.val_loader:
-                     # LOGGER.info(f"Step {step}: Starting Validation (Subset)...") # Reduced checking noise
-                     # print(f"Step {step}: Starting Validation...") # Reduced checking noise
-                     
                      val_loss = self._validate()
                      val_loss_str = f"{val_loss:.4f}"
                      
-                     # Save normal snapshot
-                     # DISABLED: Windows IO Hang Protection
-                     # torch.save({"model_state_dict": self.model.state_dict(), "steps": step}, self.cfg.snapshot_path)
-    
                      # Early Stopping check
-                    if self.early_stopper:
+                     if self.early_stopper:
                         checkpoint_data = {
                             "step": step,
                             "model_state_dict": self.model.state_dict(),

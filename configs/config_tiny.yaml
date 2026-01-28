@@ -4,10 +4,10 @@ experiment_name: "MobileNetV3_Direct_NoDistill"
 # Data Config
 dataset:
   root_dirs:
-    - "./data"
-  json_path: "./data/Dataset_Final_Aug/dataset_aug_metadata.json"
-  batch_size: 64
-  num_workers: 0 # Windows Safety
+    - "./data/Dataset_Final"
+  json_path: "./data/Dataset_Final/dataset_metadata.json"
+  batch_size: 64          # Reverted to 64 to fit 6GB VRAM
+  num_workers: 16         # optimized for 20-core CPU
   val_split: 0.1
   test_split: 0.1
   augment_online: false
@@ -29,8 +29,8 @@ num_classes: 4
 # -------------------------------------------------------------------------
 supcon:
   enabled: true
-  epochs: 100 # Reduced for temporary test
-  batch_size: 64
+  epochs: 200 # Full training epochs for SupCon phase
+  batch_size: 64           # Reverted to 64 to fit 6GB VRAM
   num_views: 2
   lr: 1.0e-3
   steps: 5000 

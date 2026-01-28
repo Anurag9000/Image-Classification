@@ -1,29 +1,24 @@
-# Ignore data, datasets, and large files
-data/
-dataset/
-*.zip
 
-
-
-
-
-*.tar
-*.h5
-*.pt
-
-# Python cache and temp files
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
 
-# Notebooks checkpoints
-.ipynb_checkpoints/
-
-# VS Code and IDE files (optional)
-.vscode/
-.idea/
-
-# Model Checkpoints and Logs
-snapshots/
+# Data and Artifacts
+data/
+logs/
+snapshots*/
+eval_results/
+checkpoints/
 *.pth
-*.txt
+
+# IDEs
+.idea/
+.vscode/
+*.swp
