@@ -79,7 +79,7 @@ class SupConPretrainer:
         base_optimizer = torch.optim.AdamW(grouped_params, lr=self.cfg.lr, weight_decay=1e-4) # Base LR unused if groups set, but good fallback
 
         if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam:
-             self.sam = SAM(self.model.parameters(), base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             self.sam = SAM(grouped_params, base_optimizer_cls=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
              self.optimizer = self.sam
              LOGGER.info("Using SAM Optimizer for SupCon")
         else:
