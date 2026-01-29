@@ -118,7 +118,7 @@ def main():
             rho=arcface_cfg_dict.get('rho', 0.05),
             
             # Link to Phase 1
-            supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth") if supcon_cfg_dict.get('enabled') else None
+            supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth").replace(".pth", "_best.pth") if os.path.exists(supcon_cfg_dict.get('snapshot_path', "").replace(".pth", "_best.pth")) else supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth")
         )
         
         trainer = ArcFaceTrainer(train_loader, val_loader, a_cfg)
