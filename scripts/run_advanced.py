@@ -71,9 +71,15 @@ def main():
         best_ckpt = snapshot_path.replace(".pth", "_best.pth")
         resume_path = supcon_cfg_dict.get('resume_from', None)
         
-        # Checking for resumption (Mid-SupCon Stop)
-        # We check paths directly using the string logic, before creating config object
-        if not os.path.exists(snapshot_path) and os.path.exists(best_ckpt):
+        # Check for ArcFace Progress (Run Advanced Logic)
+        # If ArcFace has started (best_model.pth exists), we should SKIP Phase 1 Resume
+        # to prevent backtracking.
+        arcface_best = os.path.join(arcface_cfg_dict.get('snapshot_dir', "./snapshots_advanced"), "best_model.pth")
+        arcface_started = os.path.exists(arcface_best)
+        
+        if arcface_started:
+             print(f"ArcFace Phase detected ({arcface_best}). Skipping SupCon Resume to proceed to Phase 2.")
+        elif not os.path.exists(snapshot_path) and os.path.exists(best_ckpt):
              print(f"SupCon partial checkpoint found at {best_ckpt}. Resuming Phase 1...")
              resume_path = best_ckpt
         
@@ -92,9 +98,9 @@ def main():
         
         trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
         
-        # Check if SupCon is FULLY done (final.pth exists)
-        if os.path.exists(s_cfg.snapshot_path):
-            print(f"SupCon Final Snapshot found at {s_cfg.snapshot_path}. Skipping Phase 1 Training.")
+        # Check if SupCon is FULLY done (final.pth exists) OR ArcFace Started
+        if os.path.exists(s_cfg.snapshot_path) or arcface_started:
+            print(f"SupCon Final Snapshot found (or ArcFace valid). Skipping Phase 1 Training.")
         else:
             trainer.train()
         
