@@ -2,7 +2,7 @@
 import os
 import yaml
 import logging
-from pipeline.train_supcon import SupConTrainer, SupConConfig
+from pipeline.train_supcon import SupConPretrainer as SupConTrainer, SupConConfig
 from pipeline.train_arcface import ArcFaceTrainer, ArcFaceConfig
 from pipeline.files_dataset import create_data_loader
 
