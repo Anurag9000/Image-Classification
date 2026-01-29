@@ -67,6 +67,14 @@ def main():
         
         
         # Prepare Config
+        best_ckpt = s_cfg.snapshot_path.replace(".pth", "_best.pth")
+        resume_path = supcon_cfg_dict.get('resume_from', None)
+        
+        # Checking for resumption (Mid-SupCon Stop)
+        if not os.path.exists(s_cfg.snapshot_path) and os.path.exists(best_ckpt):
+             print(f"SupCon partial checkpoint found at {best_ckpt}. Resuming Phase 1...")
+             resume_path = best_ckpt
+        
         s_cfg = SupConConfig(
             backbone=backbone_cfg,
             steps=int(supcon_cfg_dict.get('steps', 482000)),
@@ -76,15 +84,15 @@ def main():
             rho=supcon_cfg_dict.get('rho', 0.05),
             use_amp=supcon_cfg_dict.get('use_amp', True),
             image_size=224,
-            resume_from=supcon_cfg_dict.get('resume_from', None),
+            resume_from=resume_path,
             early_stopping_patience=supcon_cfg_dict.get('early_stopping_patience', 100)
         )
         
         trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
         
-        # Check if SupCon is already done
-        if os.path.exists(s_cfg.snapshot_path) or os.path.exists(s_cfg.snapshot_path.replace(".pth", "_best.pth")):
-            print(f"SupCon Snapshot found at {s_cfg.snapshot_path} (or _best). Skipping Phase 1 Training.")
+        # Check if SupCon is FULLY done (final.pth exists)
+        if os.path.exists(s_cfg.snapshot_path):
+            print(f"SupCon Final Snapshot found at {s_cfg.snapshot_path}. Skipping Phase 1 Training.")
         else:
             trainer.train()
         
