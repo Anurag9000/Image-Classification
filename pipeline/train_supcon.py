@@ -295,7 +295,24 @@ class SupConPretrainer:
                 # Combined Log Line
                 LOGGER.info(f"SupCon Step [{step}/{self.cfg.steps}] - Loss: {loss_second.item():.4f} - ValLoss: {val_loss_str} - Patience: {patience_str}")
 
-        if not self.early_stopper or not self.early_stopper.early_stop:
+        # Save Final Model (Matches run_advanced.py completion check)
+        # If Early Stopping triggered, we should still save 'final.pth' (as a copy of best) 
+        # so that the pipeline knows SupCon is fully done and doesn't try to resume it.
+        if self.early_stopper and self.early_stopper.early_stop:
+            LOGGER.info("Early Stopping was triggered. Saving 'final.pth' using the best checkpoint...")
+            best_path = self.cfg.snapshot_path.replace(".pth", "_best.pth")
+            if os.path.exists(best_path):
+                # Load best and save as final
+                ckpt = torch.load(best_path, map_location=self.device)
+                # We save it in the same structure as a normal final save
+                torch.save(ckpt, self.cfg.snapshot_path)
+                LOGGER.info(f"SupCon 'final.pth' created from best checkpoint at {self.cfg.snapshot_path}")
+            else:
+                 # Fallback if best not found for some reason
+                 torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
+                 LOGGER.info(f"SupCon 'final.pth' saved (fallback) at {self.cfg.snapshot_path}")
+        else:
+             # Normal finish
              torch.save({"model_state_dict": self.model.state_dict(), "steps": self.cfg.steps}, self.cfg.snapshot_path)
              LOGGER.info("SupCon pretraining finished. Final model saved at %s", self.cfg.snapshot_path)
 
