@@ -27,7 +27,7 @@ supcon:
   epochs: 50
   batch_size: 64
   lr: 1.0e-3
-  steps: 2000
+  steps: 482000 # ~50 Epochs * 9625 steps/epoch
   use_sam: true
   snapshot_path: "./snapshots_advanced/supcon_final.pth" # Save here
 
