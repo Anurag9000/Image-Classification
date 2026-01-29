@@ -33,7 +33,7 @@ supcon:
   use_amp: true # Optimization: Re-enable AMP
   rho: 0.05 # Reset rho (unused without SAM)
   resume_from: "./snapshots_advanced/supcon_final_best.pth" # Resume from last best checkpoint
-  early_stopping_patience: 100 # Optimization: Increase to 100 to prevent premature stopping
+  early_stopping_patience: 1000 # Optimization: Increase to 1000 to FORCE training (SupCon loss is noisy)
 
 # -------------------------------------------------------------------------
 # Phase 2: ArcFace (ULMFiT Fine-Tuning)
@@ -41,18 +41,18 @@ supcon:
 arcface:
   enabled: true
   epochs: 20
-  lr: 5.0e-5 # Optimization: Increased to 5e-5 for faster convergence
+  lr: 1.0e-5 # Optimization: Reduced to 1e-5 for maximum stability (Safe Mode)
   snapshot_dir: "./snapshots_advanced"
   
   # ULMFiT Strategy
   use_ulmfit: true
   gradual_unfreezing: true
-  unfreeze_epoch: 1 # Optimization: Unfreeze immediately (Epoch 1) instead of waiting
+  unfreeze_epoch: 2 # Optimization: Revert to 2 (Freeze Epoch 1) to align head first
   discriminative_lr_decay: 2.6
   
   use_sam: false # Optimization: Disable SAM to save VRAM (Doubles memory usage)
   use_amp: true  # Optimization: Re-enable AMP (Stable without SAM)
-  val_limit_batches: 10 # Check only 10 batches every 10 steps
+  val_limit_batches: 50 # Speed up validation
   early_stopping_patience: 100 # Optimization: Increased to 100 to prevent premature stopping (gives ~1000 steps buffer)
 
 # -------------------------------------------------------------------------
