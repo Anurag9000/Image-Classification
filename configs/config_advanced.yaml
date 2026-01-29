@@ -28,10 +28,10 @@ supcon:
   batch_size: 16
   lr: 1.0e-3
   steps: 482000 # ~50 Epochs * 9625 steps/epoch
-  use_sam: true
+  use_sam: false # Optimization: Disable SAM
   snapshot_path: "./snapshots_advanced/supcon_final.pth" # Save here
-  use_amp: false # Critical Fix: Disable AMP to prevent NaNs
-  rho: 0.02 # Critical Fix: Reduce SAM perturbation
+  use_amp: true # Optimization: Re-enable AMP
+  rho: 0.05 # Reset rho (unused without SAM)
 
 # -------------------------------------------------------------------------
 # Phase 2: ArcFace (ULMFiT Fine-Tuning)
@@ -48,8 +48,8 @@ arcface:
   unfreeze_epoch: 2 # Epoch 1 Head Only, Epoch 2+ Full (Optimization: 1 epoch is enough for 600k data)
   discriminative_lr_decay: 2.6
   
-  use_sam: true
-  use_amp: false # Critical Fix: Disable AMP to prevent NaNs
+  use_sam: false # Optimization: Disable SAM to save VRAM (Doubles memory usage)
+  use_amp: true  # Optimization: Re-enable AMP (Stable without SAM)
   val_limit_batches: 10 # Check only 10 batches every 10 steps
   early_stopping_patience: 20
 
