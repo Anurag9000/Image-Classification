@@ -172,10 +172,20 @@ class SupConPretrainer:
 
             # Images is (B, V, C, H, W) where V is num_views
             batch_size = images.size(0)
+            # images shape: (batch, num_views, C, H, W)
+            # Reshape to (batch * num_views, C, H, W)
+            batch_size = images.shape[0]
             images = images.view(-1, 3, self.cfg.image_size, self.cfg.image_size).to(self.device)
             # Create expanded labels: each source label repeated num_views times
             expanded_labels = labels.view(-1, 1).repeat(1, self.cfg.num_views).view(-1).to(self.device)
-            LOGGER.info(f"[TRACE] Step {step}: Data moved to GPU.")
+            
+            # Debug: Verify shapes
+            expected_total = batch_size * self.cfg.num_views
+            if images.shape[0] != expected_total or expanded_labels.shape[0] != expected_total:
+                LOGGER.error(f"Shape mismatch! images: {images.shape}, labels: {expanded_labels.shape}, expected: {expected_total}")
+                raise RuntimeError(f"Multi-view reshaping failed. Got {images.shape[0]} images but expected {expected_total}")
+            
+            LOGGER.info(f"[TRACE] Step {step}: Data moved to GPU. Batch: {batch_size}, Total views: {images.shape[0]}")
 
             # Fix: torch.cuda.amp.autocast -> torch.amp.autocast('cuda', ...)
             with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
