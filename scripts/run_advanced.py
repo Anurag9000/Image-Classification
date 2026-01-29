@@ -81,7 +81,12 @@ def main():
         )
         
         trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
-        trainer.train()
+        
+        # Check if SupCon is already done
+        if os.path.exists(s_cfg.snapshot_path) or os.path.exists(s_cfg.snapshot_path.replace(".pth", "_best.pth")):
+            print(f"SupCon Snapshot found at {s_cfg.snapshot_path} (or _best). Skipping Phase 1 Training.")
+        else:
+            trainer.train()
         
         # Verify Snapshot
         if os.path.exists(s_cfg.snapshot_path) or os.path.exists(s_cfg.snapshot_path.replace(".pth", "_best.pth")):
