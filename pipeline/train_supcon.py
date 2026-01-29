@@ -200,24 +200,36 @@ class SupConPretrainer:
                      raise RuntimeError("NaN detected in SupCon Model Output (Features)!")
 
             if self.sam:
+                 # 1. First Backward Pass (Scaled)
+                 self.scaler.scale(loss).backward()
+                 
+                 # 2. Unscale for Gradient Clipping (Optional but recommended)
                  self.scaler.unscale_(self.sam.base_optimizer)
                  torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
                  
-                 def closure_first():
-                     self.sam.first_step(zero_grad=True)
-                     return loss
+                 # 3. First Step (Move to neighborhood)
+                 # Note: self.sam.first_step() requires parameters to have gradients
+                 self.sam.first_step(zero_grad=True)
                  
-                 closure_first()
-                 
+                 # 4. Second Forward Pass (in neighborhood)
                  with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
                      feats_2 = self.model(images)
                      loss_2 = self.loss_fn(feats_2, expanded_labels)
-                     
+                 
+                 # 5. Second Backward Pass (Scaled)
                  self.scaler.scale(loss_2).backward()
+                 
+                 # 6. Unscale again for Clipping (before actual step)
                  self.scaler.unscale_(self.sam.base_optimizer)
                  torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=5.0)
                  
-                 self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
+                 # 7. Second Step (Update weights)
+                 self.sam.second_step(zero_grad=True)
+                 
+                 # 8. Update Scaler
+                 self.scaler.update()
+                 
+                 loss_second = loss_2 # For logging
                  self.scaler.update()
 
             elif self.cfg.use_amp:
