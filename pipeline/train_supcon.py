@@ -230,7 +230,6 @@ class SupConPretrainer:
                  self.scaler.update()
                  
                  loss_second = loss_2 # For logging
-                 self.scaler.update()
 
             elif self.cfg.use_amp:
                 self.scaler.scale(loss).backward()
