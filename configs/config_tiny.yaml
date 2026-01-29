@@ -44,7 +44,7 @@ supcon:
 arcface:
   enabled: true
   epochs: 20
-  lr: 1.0e-3
+  lr: 5.0e-4            # Reduced from 1e-3 to prevent divergence
   snapshot_dir: "./snapshots_tiny"
   early_stopping_patience: 10
   use_amp: true 

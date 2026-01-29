@@ -1,0 +1,62 @@
+project_name: "Image_Classification_Advanced"
+experiment_name: "EfficientNet_B0_Student_B3_Teacher_CBAM_ULMFiT"
+
+# Data Config
+dataset:
+  root_dirs:
+    - "./data/Dataset_Final"
+  json_path: "./data/Dataset_Final/dataset_metadata.json"
+  batch_size: 32          # Reduced to 32 for Dual Model (Student+Teacher)
+  num_workers: 16
+  val_split: 0.1
+  test_split: 0.1
+  augment_online: true    # Enable heavy augmentation for ULMFiT
+  
+# -------------------------------------------------------------------------
+# Student Model (EfficientNet-B0 + High-Freq CBAM)
+# -------------------------------------------------------------------------
+backbone: 
+  cnn_model: "efficientnet_b0"
+  vit_model: null 
+  pretrained: true
+  use_cbam: "every_2_blocks" # Custom High-Freq Injection
+  dropout: 0.3
+
+# -------------------------------------------------------------------------
+# Teacher Model (EfficientNet-B3 - Frozen Feature Extractor)
+# -------------------------------------------------------------------------
+teacher_backbone_config:
+  cnn_model: "efficientnet_b3"
+  vit_model: null # Disable default ViT
+  pretrained: true
+  use_cbam: false # Standard Teacher
+  
+# -------------------------------------------------------------------------
+# Distillation & ULMFiT Strategy
+# -------------------------------------------------------------------------
+distill:
+  enabled: true
+  epochs: 20
+  lr: 1.0e-4 # Reduced to 1e-4 as requested
+  
+  # ULMFiT Settings
+  use_ulmfit: true
+  gradual_unfreezing: true
+  discriminative_lr_decay: 2.6 # Base decay factor per layer group
+  
+  # Distill Loss Weights
+  distill_weight: 0.0      # Disable Soft Targets (Teacher Head is Random/Undefined)
+  hard_label_weight: 1.0   # CrossEntropy weight
+  feature_loss_weight: 2.0 # MST on features (Distill ImageNet Knowledge)
+  temperature: 3.0
+  
+  snapshot_dir: "./snapshots_advanced"
+  log_csv: "./logs/advanced_training.csv"
+  
+  # Optimizer
+  use_sam: true  # Sharpness Aware Minimization for robustness
+  rho: 0.05
+  early_stopping_patience: 15
+  
+embedding_size: 512
+num_classes: 4

@@ -27,6 +27,8 @@ LOGGER = logging.getLogger(__name__)
 class DistillConfig:
     num_classes: int = 100
     distill_weight: float = 0.3
+    hard_label_weight: float = 1.0
+    feature_loss_weight: float = 0.0
     lr: float = 5e-6
     rho: float = 0.05
     mix_method: str = "mixup"
@@ -58,6 +60,9 @@ class DistillConfig:
     lookahead_k: int = 5
     lookahead_alpha: float = 0.5
     val_limit_batches: int = 100
+    use_ulmfit: bool = False
+    gradual_unfreezing: bool = False
+    discriminative_lr_decay: float = 2.6
 
 class FineTuneDistillTrainer:
     def __init__(self, train_loader: DataLoader, val_loader: Optional[DataLoader] = None, config: Optional[DistillConfig] = None):
@@ -92,7 +97,15 @@ class FineTuneDistillTrainer:
             for param in self.teacher_backbone.parameters():
                 param.requires_grad = False
         else:
-            LOGGER.warning("No teacher backbone path found or file does not exist. Distillation might fail if weights expected.")
+             # Force initialization from ImageNet if config provided but no path
+             if self.cfg.teacher_backbone_config and self.cfg.teacher_backbone_config.get("cnn_model"):
+                 LOGGER.info(f"Initializing Teacher Backbone (ImageNet) from config: {self.cfg.teacher_backbone_config.get('cnn_model')}")
+                 self.teacher_backbone = HybridBackbone(self.teacher_backbone_cfg).to(self.device)
+                 self.teacher_backbone.eval()
+                 for param in self.teacher_backbone.parameters():
+                     param.requires_grad = False
+             else:
+                 LOGGER.warning("No teacher backbone path found and no valid config. Distillation will default to Self-Distillation.")
         # Try to load head from backbone path if specific head path is missing
         if not self.cfg.teacher_head_path and self.cfg.teacher_backbone_path and os.path.exists(self.cfg.teacher_backbone_path):
              LOGGER.info("Attempting to load teacher head from backbone path: %s", self.cfg.teacher_backbone_path)
@@ -113,6 +126,26 @@ class FineTuneDistillTrainer:
                      LOGGER.info("Successfully loaded teacher head from backbone checkpoint.")
              except Exception as e:
                  LOGGER.warning(f"Could not auto-load teacher head from backbone path: {e}")
+        
+        # If still no teacher head, and we have a teacher backbone (freshly inited), we should probably init a fresh head?
+        # NO, a fresh random head is useless for a teacher. 
+        # But if the teacher backbone is ImageNet pretrained, maybe we can assume it's good enough features?
+        # But we need logits. 
+        # If we trained the teacher separately, we MUST have a head path or it should be in the backbone checkpoint.
+        # If we are using ImageNet backbone as teacher, we don't have a classification head for OUR classes (4 classes).
+        # So using an ImageNet teacher backbone + Random Head is bad.
+        # Conclusion: If using ImageNet teacher, we usually only distill FEATURES (feature_loss) or we need to train the teacher first.
+        # Or we use the Student's head architecture logic but we can't 'load' weights.
+        # Given the plan: "initialize the Teacher with ImageNet weights... act as strong generic feature extractor".
+        # This implies feature distillation is key, OR we accept random head (bad for soft targets).
+        # Fix: If no teacher head found, DISABLE Soft Target Distillation or init random (warn user).
+        
+        if self.teacher_backbone and not self.teacher_head and not self.cfg.teacher_head_path:
+             LOGGER.warning("Teacher Backbone present but NO Teacher Head found. Soft Target Distillation will be NOISY/RANDOM if not handled.")
+             # We will init it so code runs, but warn.
+             self.teacher_head = AdaFace(embedding_size=self.teacher_backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+             self.teacher_head.eval()
+             for param in self.teacher_head.parameters(): param.requires_grad = False
 
         if self.cfg.teacher_head_path and os.path.exists(self.cfg.teacher_head_path):
             LOGGER.info("Loading teacher head from %s", self.cfg.teacher_head_path)
@@ -143,10 +176,48 @@ class FineTuneDistillTrainer:
         self.trainable_params = params
         
         # Optimizer Selection
-        base_optimizer = torch.optim.AdamW(self.trainable_params, lr=self.cfg.lr, weight_decay=1e-4)
+        if self.cfg.use_ulmfit:
+            # Discriminative Learning Rates
+            # Split parameters into groups by depth
+            # Simplified approach: Head gets LR, Backbone gets LR/decay, etc.
+            # For EfficientNet, we can group by stages.
+            # But generic approach: Head = Base LR. Backbone = Base LR / Decay. 
+            # Even better: Layer-wise decay.
+            
+            decay = self.cfg.discriminative_lr_decay
+            
+            # Head Params
+            head_params = list(self.head.parameters()) + list(self.feature_proj.parameters())
+            
+            # Backbone Params (Split into 3 groups for "Slanted" effect)
+            # 1. Embeddings/Stem (Deepest/Earliest) -> Lowest LR
+            # 2. Middle Layers
+            # 3. Top Layers (closest to Head) -> Higher LR
+            
+            bb_params = list(self.backbone.parameters())
+            n = len(bb_params)
+            p1 = bb_params[:n//3]
+            p2 = bb_params[n//3:2*n//3]
+            p3 = bb_params[2*n//3:]
+            
+            grouped_params = [
+                {"params": p1, "lr": self.cfg.lr / (decay**3)}, # Deepest
+                {"params": p2, "lr": self.cfg.lr / (decay**2)},
+                {"params": p3, "lr": self.cfg.lr / (decay**1)},
+                {"params": head_params, "lr": self.cfg.lr},     # Head
+            ]
+            LOGGER.info(f"ULMFiT: Applied Discriminative LRs (Decay: {decay})")
+            # Calculate base optimizer to ensure variables define correctly for SAM
+            # If using SAM, we don't init base_optimizer yet, we let SAM do it.
+            params_to_optimize = grouped_params
+        else:
+            params_to_optimize = self.trainable_params
+            
+        base_optimizer = torch.optim.AdamW(params_to_optimize, lr=self.cfg.lr, weight_decay=1e-4)
         
         if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam:
-             self.sam = SAM(self.trainable_params, base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             # SAM requires the class, not the instance
+             self.sam = SAM(params_to_optimize, base_optimizer_cls=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
              self.optimizer = self.sam 
              LOGGER.info("Using SAM Optimizer for Distillation")
         else:
@@ -259,9 +330,9 @@ class FineTuneDistillTrainer:
         projected_student_features = self.feature_proj(student_features)
         feature_loss = self.feature_mse(projected_student_features, teacher_features)
         return (
-            (1 - self.cfg.distill_weight) * hard_loss
-            + (self.cfg.distill_weight / 2) * soft_loss
-            + (self.cfg.distill_weight / 2) * feature_loss
+            self.cfg.hard_label_weight * hard_loss
+            + self.cfg.distill_weight * soft_loss
+            + self.cfg.feature_loss_weight * feature_loss
         )
 
     def _apply_manifold_mixup(self, logits, labels):
@@ -338,6 +409,26 @@ class FineTuneDistillTrainer:
 
         step_count = self.step_resumed
         for epoch in range(self.start_epoch, self.cfg.epochs + 1):
+            
+            # ULMFiT Gradual Unfreezing
+            if self.cfg.gradual_unfreezing:
+                if epoch == 1:
+                    LOGGER.info("ULMFiT: Epoch 1 - Freezing Backbone, Training Head Only")
+                    self.backbone.eval()
+                    for p in self.backbone.parameters(): p.requires_grad = False
+                    for p in self.head.parameters(): p.requires_grad = True
+                elif epoch == 2:
+                    LOGGER.info("ULMFiT: Epoch 2 - Unfreezing Top Layers")
+                    self.backbone.train()
+                    # Unfreeze last 33%
+                    n = len(list(self.backbone.parameters()))
+                    for i, p in enumerate(self.backbone.parameters()):
+                        if i >= 2*n//3: p.requires_grad = True
+                elif epoch >= 3:
+                     LOGGER.info("ULMFiT: Epoch 3+ - Unfreezing Full Model")
+                     self.backbone.train()
+                     for p in self.backbone.parameters(): p.requires_grad = True
+                     
             epoch_losses = []
             preds_all, labels_all = [], []
 
@@ -361,17 +452,16 @@ class FineTuneDistillTrainer:
                         loss = (loss + mix_loss * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
                 if self.sam:
+                    # 1. First Step
+                    self.scaler.scale(loss).backward()
                     self.scaler.unscale_(self.sam.base_optimizer)
                     torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
                     
-                    def closure_first():
-                        self.sam.first_step(zero_grad=True)
-                        return loss 
+                    # SAM first step (Compute perturbation and apply)
+                    self.sam.first_step(zero_grad=True)
                     
-                    closure_first()
-                    
+                    # 2. Second Step (Re-forward with perturbed weights)
                     with torch.amp.autocast('cuda', enabled=self.cfg.use_amp):
-                         # Re-compute for SAM step 2
                          student_features_2 = self.backbone(mixed_x)
                          student_logits_2 = self.head(student_features_2, y_a)
                          loss_2 = self._distill_loss(student_logits_2, student_features_2, teacher_soft, teacher_features, y_a, y_b, lam)
@@ -380,9 +470,6 @@ class FineTuneDistillTrainer:
                              loss_2 = (loss_2 + mix_loss_2 * self.cfg.manifold_mixup_weight) / (1 + self.cfg.manifold_mixup_weight)
 
                     self.scaler.scale(loss_2).backward()
-                    self.scaler.unscale_(self.sam.base_optimizer)
-                    torch.nn.utils.clip_grad_norm_(self.trainable_params, max_norm=5.0)
-                    
                     self.sam.second_step(zero_grad=True, grad_scaler=self.scaler)
                     self.scaler.update()
 

@@ -148,7 +148,10 @@ class BackboneConfig:
     vit_drop_path_rate: float = 0.2
     mixstyle: bool = False
     mixstyle_p: float = 0.5
+    mixstyle: bool = False
+    mixstyle_p: float = 0.5
     mixstyle_alpha: float = 0.1
+    dropout: float = 0.0
 
 
 def _reset_classifier(model: nn.Module) -> None:
@@ -171,6 +174,7 @@ class HybridBackbone(nn.Module):
             self.cfg.cnn_model,
             pretrained=self.cfg.pretrained,
             drop_path_rate=self.cfg.cnn_drop_path_rate,
+            drop_rate=self.cfg.dropout,
         )
         _reset_classifier(self.cnn_backbone)
 
@@ -310,6 +314,71 @@ class HybridBackbone(nn.Module):
         dummy = torch.zeros(1, 3, 224, 224)
         
         # --- MobileNetV3 Support ---
+        # --- EfficientNet Support ---
+        if 'efficientnet' in self.cfg.cnn_model:
+            LOGGER.info("Detected EfficientNet-style backbone. Injecting High-Frequency CBAM (Every 2 Blocks)...")
+            
+            # 1. Run Stem
+            try:
+                with torch.no_grad():
+                    # EfficientNets usually have conv_stem -> bn1 -> act1
+                    x = model.conv_stem(dummy)
+                    x = model.bn1(x)
+                    if hasattr(model, 'act1'): x = model.act1(x)
+            except Exception as e:
+                LOGGER.error(f"Error in EfficientNet Stem Forward: {e}")
+                raise e
+            
+            # EfficientNet in timm: model.blocks is nn.Sequential of stages (nn.Sequential of blocks)
+            # We need to rebuild the stages.
+            
+            new_stages = nn.Sequential()
+            
+            # Iterate through stages
+            for stage_idx, stage in enumerate(model.blocks):
+                new_stage = nn.Sequential()
+                blocks_since_last_cbam = 0
+                
+                for block_idx, block in enumerate(stage):
+                    # Run dummy to get shape
+                    with torch.no_grad():
+                        x = block(x)
+                        
+                    new_stage.add_module(f"block_{block_idx}", block)
+                    blocks_since_last_cbam += 1
+                    
+                    # User Request: "between every two conv blocks"
+                    # Also respect "every_2_blocks" config explicitly
+                    should_inject = False
+                    if self.cfg.use_cbam == "every_2_blocks":
+                        if blocks_since_last_cbam >= 2:
+                            should_inject = True
+                    elif self.cfg.use_cbam is True:
+                        # Default behavior: Inject at end of stage only? 
+                        # Or consistent per block? Let's stick to "every 2" as reasonable default for True too if heavy.
+                        if blocks_since_last_cbam >= 2:
+                            should_inject = True
+                            
+                    if should_inject:
+                         channels = x.size(1)
+                         cbam = CBAM(channels, reduction_ratio=8)
+                         new_stage.add_module(f"cbam_{block_idx}", cbam)
+                         blocks_since_last_cbam = 0
+                
+                # Ensure stage ends with CBAM if not recently added (Optional, but good for feature refinement)
+                # If we want to guarantee Inter-Stage attention:
+                if blocks_since_last_cbam > 0:
+                     channels = x.size(1)
+                     cbam = CBAM(channels, reduction_ratio=8)
+                     new_stage.add_module(f"cbam_end", cbam)
+                
+                new_stages.add_module(f"stage_{stage_idx}", new_stage)
+            
+            model.blocks = new_stages
+            LOGGER.info("Successfully injected High-Freq CBAM into EfficientNet.")
+            return
+
+        # --- MobileNetV3 Support ---
         if hasattr(model, 'blocks') and isinstance(model.blocks, nn.Sequential):
             LOGGER.info("Detected MobileNetV3-style backbone. Injecting Interleaved CBAM...")
             
@@ -353,6 +422,59 @@ class HybridBackbone(nn.Module):
                 
             model.blocks = new_blocks
             LOGGER.info(f"Successfully injected {len(model.blocks)//2} CBAM modules into MobileNetV3 blocks.")
+            return
+
+        # --- EfficientNet Support ---
+        if 'efficientnet' in self.cfg.cnn_model:
+            LOGGER.info("Detected EfficientNet-style backbone. Injecting High-Frequency CBAM (Every 2 Blocks)...")
+            
+            # EfficientNet in timm: model.blocks is nn.Sequential of stages (nn.Sequential of blocks)
+            # We need to rebuild the stages.
+            
+            new_stages = nn.Sequential()
+            
+            # Iterate through stages
+            for stage_idx, stage in enumerate(model.blocks):
+                new_stage = nn.Sequential()
+                blocks_since_last_cbam = 0
+                
+                for block_idx, block in enumerate(stage):
+                    # Run dummy to get shape
+                    with torch.no_grad():
+                        x = block(x)
+                        
+                    new_stage.add_module(f"block_{block_idx}", block)
+                    blocks_since_last_cbam += 1
+                    
+                    # User Request: "between every two conv blocks"
+                    # Also respect "every_2_blocks" config explicitly
+                    should_inject = False
+                    if self.cfg.use_cbam == "every_2_blocks":
+                        if blocks_since_last_cbam >= 2:
+                            should_inject = True
+                    elif self.cfg.use_cbam is True:
+                        # Default behavior: Inject at end of stage only? 
+                        # Or consistent per block? Let's stick to "every 2" as reasonable default for True too if heavy.
+                        if blocks_since_last_cbam >= 2:
+                            should_inject = True
+                            
+                    if should_inject:
+                         channels = x.size(1)
+                         cbam = CBAM(channels, reduction_ratio=8)
+                         new_stage.add_module(f"cbam_{block_idx}", cbam)
+                         blocks_since_last_cbam = 0
+                
+                # Ensure stage ends with CBAM if not recently added (Optional, but good for feature refinement)
+                # If we want to guarantee Inter-Stage attention:
+                if blocks_since_last_cbam > 0:
+                     channels = x.size(1)
+                     cbam = CBAM(channels, reduction_ratio=8)
+                     new_stage.add_module(f"cbam_end", cbam)
+                
+                new_stages.add_module(f"stage_{stage_idx}", new_stage)
+            
+            model.blocks = new_stages
+            LOGGER.info("Successfully injected High-Freq CBAM into EfficientNet.")
             return
 
         # --- ResNet Support ---
