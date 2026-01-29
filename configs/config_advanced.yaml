@@ -41,13 +41,13 @@ supcon:
 arcface:
   enabled: true
   epochs: 20
-  lr: 2.0e-5 # Optimization: Reduced from 1e-4 to 2e-5 for stability with Batch 16
+  lr: 5.0e-5 # Optimization: Increased to 5e-5 for faster convergence
   snapshot_dir: "./snapshots_advanced"
   
   # ULMFiT Strategy
   use_ulmfit: true
   gradual_unfreezing: true
-  unfreeze_epoch: 2 # Epoch 1 Head Only, Epoch 2+ Full (Optimization: 1 epoch is enough for 600k data)
+  unfreeze_epoch: 1 # Optimization: Unfreeze immediately (Epoch 1) instead of waiting
   discriminative_lr_decay: 2.6
   
   use_sam: false # Optimization: Disable SAM to save VRAM (Doubles memory usage)

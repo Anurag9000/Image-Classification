@@ -292,12 +292,11 @@ class ArcFaceTrainer:
         mixed_logits = lam * logits + (1 - lam) * logits[idx]
         return self._compute_loss(mixed_logits, labels, labels[idx], lam)
 
-    def _validate(self) -> tuple[float, float, float]:
-        if not self.val_loader:
-            return 0.0, 0.0, 0.0
-
+    def _validate(self, loader=None):
         self.backbone.eval()
         self.head.eval()
+        
+        target_loader = loader if loader else self.val_loader
         val_loss = 0.0
         val_steps = 0
         all_preds = []
@@ -306,7 +305,7 @@ class ArcFaceTrainer:
         with torch.no_grad():
             # limit_batches = 50 # Removed hard limit for exhaustive validation accuracy
             limit_batches = getattr(self.cfg, "val_limit_batches", None) 
-            for i, (images, labels) in enumerate(self.val_loader):
+            for i, (images, labels) in enumerate(target_loader):
                 if limit_batches and i >= limit_batches:
                     break
                 images = images.to(self.device, non_blocking=True)
@@ -327,12 +326,36 @@ class ArcFaceTrainer:
                 all_labels.extend(labels.cpu().numpy())
 
         avg_val_loss = val_loss / max(val_steps, 1)
-        avg_val_acc = accuracy_score(all_labels, all_preds)
+        avg_val_acc = accuracy_score(all_labels, all_preds) * 100.0 # Fix: scale to percentage
         avg_val_f1 = f1_score(all_labels, all_preds, average="macro")
         
         self.backbone.train()
         self.head.train()
         return avg_val_loss, avg_val_acc, avg_val_f1
+
+    def test(self, test_loader):
+        LOGGER.info("Starting Test Set Evaluation...")
+        if not test_loader:
+            LOGGER.warning("No Test Loader provided!")
+            return
+
+        # Load best model if available
+        best_path = os.path.join(self.cfg.snapshot_dir, "best_model.pth")
+        if os.path.exists(best_path):
+             LOGGER.info(f"Loading best model from {best_path} for testing...")
+             ckpt = torch.load(best_path, map_location=self.device)
+             self.backbone.load_state_dict(ckpt['model_state_dict'])
+             self.head.load_state_dict(ckpt['head_state_dict'])
+        else:
+             LOGGER.warning("Best model snapshot not found. Testing with current model state.")
+
+        loss, acc, f1 = self._validate(loader=test_loader)
+        LOGGER.info(f"\n{'='*20} TEST RESULTS {'='*20}")
+        LOGGER.info(f"Test Loss:     {loss:.4f}")
+        LOGGER.info(f"Test Accuracy: {acc:.2f}%")
+        LOGGER.info(f"Test F1 Score: {f1:.4f}")
+        LOGGER.info(f"{'='*54}\n")
+        return acc, f1
 
     def train(self):
         self.backbone.train()
