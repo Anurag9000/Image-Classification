@@ -210,7 +210,7 @@ class ArcFaceTrainer:
             
         self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
             self.optimizer if not self.sam else self.sam.base_optimizer, 
-            max_lr=self.cfg.lr * 10,
+            max_lr=self.cfg.lr, # Fix: Removed * 10 multiplier for stability
             total_steps=total_steps if total_steps > 0 else 1,
         )
 
