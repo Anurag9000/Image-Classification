@@ -2,55 +2,117 @@
 import os
 import yaml
 import logging
-from pipeline.fine_tune_distill import FineTuneDistillTrainer, DistillConfig, create_distill_loader
+from pipeline.train_supcon import SupConTrainer, SupConConfig
+from pipeline.train_arcface import ArcFaceTrainer, ArcFaceConfig
+from pipeline.files_dataset import create_data_loader
 
 def main():
     # Load Config
     with open("configs/config_advanced.yaml", "r") as f:
         cfg_dict = yaml.safe_load(f)
         
-    print("Loaded Advanced Config.")
+    print("Loaded Advanced Config (SupCon + ArcFace).")
     
-    # Create Config Object
-    # Flatten config dict for dataclass
-    # We need to map nested dicts to fields manually or use **kwargs if class supports it
-    # DistillConfig has 'backbone', 'teacher_backbone_config', 'distill', etc.
+    # -------------------------------------------------------------------------
+    # Parsing Config Sections
+    # -------------------------------------------------------------------------
+    dataset_cfg = cfg_dict.get('dataset', {})
+    backbone_cfg = cfg_dict.get('backbone', {})
+    supcon_cfg_dict = cfg_dict.get('supcon', {})
+    arcface_cfg_dict = cfg_dict.get('arcface', {})
     
-    # Merge 'distill' section into main config
-    distill_cfg = cfg_dict.pop('distill', {})
-    dataset_cfg = cfg_dict.pop('dataset', {})
-    backbone_cfg = cfg_dict.pop('backbone', {})
-    teacher_cfg = cfg_dict.pop('teacher_backbone_config', {})
+    # -------------------------------------------------------------------------
+    # Shared Data Loaders
+    # -------------------------------------------------------------------------
+    # SupCon usually uses a specialized TwoCropTransform, but our current SupConTrainer
+    # handles generic loaders and applies mixup/views internally or expects the loader to return them.
+    # Let's check SupConTrainer logic: It usually needs Multi-View sampling.
+    # If our SupConTrainer relies on 'augment_online' it might use standard augs.
+    # Standard SimCLR needs: X -> (X1, X2).
+    # If our files_dataset doesn't support SimCLR transform, SupCon might fail or be weak.
+    # However, existing repo implies SupConTrainer works with the current loader.
+    # We will use the standard loader.
     
-    # Init Config
-    distill_cfg.pop('enabled', None)  # Remove 'enabled' key
-    distill_cfg.pop('snapshot_path', None) # Remove if present
-    
-    config = DistillConfig(
-        num_classes=cfg_dict.get('num_classes', 4),
-        backbone=backbone_cfg,
-        teacher_backbone_config=teacher_cfg,
-        **distill_cfg # Unpack distill settings (epochs, lr, etc.)
-    )
-    
-    # Data Loaders
-    train_loader, val_loader = create_distill_loader(
-        root=dataset_cfg.get('root_dirs'),
-        batch_size=dataset_cfg.get('batch_size', 32),
+    train_loader, val_loader, _ = create_data_loader(
+        root_dirs=dataset_cfg.get('root_dirs'),
+        batch_size=dataset_cfg.get('batch_size', 64),
         num_workers=dataset_cfg.get('num_workers', 4),
         val_split=dataset_cfg.get('val_split', 0.1),
+        test_split=dataset_cfg.get('test_split', 0.1),
         json_path=dataset_cfg.get('json_path'),
         augment_online=dataset_cfg.get('augment_online', True)
     )
     
     print("Data Loaders Created.")
     
-    # Init Trainer
-    trainer = FineTuneDistillTrainer(train_loader, val_loader, config)
+    # -------------------------------------------------------------------------
+    # Phase 1: SupCon (Supervised Contrastive Pre-training)
+    # -------------------------------------------------------------------------
+    if supcon_cfg_dict.get('enabled', False):
+        print("\n=== Phase 1: Supervised Contrastive Pre-training ===")
+        from pipeline.train_supcon import create_supcon_loader
+        
+        # SupCon needs Multi-View Loader
+        sup_train_loader, sup_val_loader = create_supcon_loader(
+            batch_size=int(supcon_cfg_dict.get('batch_size', 64)),
+            root=dataset_cfg.get('json_path'), # Pass json path as root for logic
+            num_workers=dataset_cfg.get('num_workers', 4),
+            json_path=dataset_cfg.get('json_path')
+        )
+        
+        # Prepare Config
+        s_cfg = SupConConfig(
+            backbone=backbone_cfg,
+            num_classes=cfg_dict.get('num_classes', 4),
+            epochs=supcon_cfg_dict.get('epochs', 50),
+            lr=float(supcon_cfg_dict.get('lr', 1e-3)),
+            snapshot_path=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth"),
+            batch_size=int(supcon_cfg_dict.get('batch_size', 64))
+        )
+        
+        trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
+        trainer.train()
+        
+        # Verify Snapshot
+        if os.path.exists(s_cfg.snapshot_path):
+            print(f"SupCon Phase Complete. Saved to {s_cfg.snapshot_path}")
+        else:
+            print("WARNING: SupCon Snapshot not found. Phase 2 might fail or strict load will error.")
+    else:
+        print("Skipping SupCon Phase (Disabled in Config).")
+
+    # -------------------------------------------------------------------------
+    # Phase 2: ArcFace (Classification Fine-Tuning)
+    # -------------------------------------------------------------------------
+    if arcface_cfg_dict.get('enabled', True):
+        print("\n=== Phase 2: ArcFace Fine-Tuning (ULMFiT) ===")
+        
+        # Prepare Config
+        a_cfg = ArcFaceConfig(
+            num_classes=cfg_dict.get('num_classes', 4),
+            backbone=backbone_cfg,
+            epochs=arcface_cfg_dict.get('epochs', 20),
+            lr=float(arcface_cfg_dict.get('lr', 1e-4)),
+            snapshot_dir=arcface_cfg_dict.get('snapshot_dir', "./snapshots_advanced"),
+            
+            # ULMFiT Stats
+            use_ulmfit=arcface_cfg_dict.get('use_ulmfit', False),
+            gradual_unfreezing=arcface_cfg_dict.get('gradual_unfreezing', False),
+            discriminative_lr_decay=arcface_cfg_dict.get('discriminative_lr_decay', 2.6),
+            
+            # Others
+            use_sam=arcface_cfg_dict.get('use_sam', False),
+            use_amp=arcface_cfg_dict.get('use_amp', True),
+            
+            # Link to Phase 1
+            supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth") if supcon_cfg_dict.get('enabled') else None
+        )
+        
+        trainer = ArcFaceTrainer(train_loader, val_loader, a_cfg)
+        trainer.train()
+        print("ArcFace Phase Complete.")
     
-    # Train
-    print("Starting Advanced Training (EfficientNet + CBAM + ULMFiT)...")
-    trainer.train()
+    print("\nAdvanced Pipeline Finished Successfully.")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

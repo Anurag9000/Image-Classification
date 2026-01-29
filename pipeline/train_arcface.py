@@ -65,6 +65,11 @@ class ArcFaceConfig:
     use_lookahead: bool = False
     supcon_snapshot: Optional[str] = None # Path to pretrained SupCon model to load
     resume_from: Optional[str] = None # Resume from checkpoint
+    
+    # ULMFiT Settings
+    use_ulmfit: bool = False
+    gradual_unfreezing: bool = False
+    discriminative_lr_decay: float = 2.6
 
 
 class ArcFaceTrainer:
@@ -137,18 +142,45 @@ class ArcFaceTrainer:
             if param.requires_grad:
                 head_params.append(param)
                 
-        grouped_params = [
-            {"params": main_params, "lr": self.cfg.lr * 0.1},
-            {"params": cbam_params, "lr": self.cfg.lr * 10.0},
-            {"params": head_params, "lr": self.cfg.lr}, # Head learns at normal rate
-        ]
+        if hasattr(self.cfg, 'use_ulmfit') and self.cfg.use_ulmfit:
+            # Discriminative Learning Rates (ULMFiT Style)
+            decay = getattr(self.cfg, 'discriminative_lr_decay', 2.6)
+            LOGGER.info(f"ULMFiT Enabled: Applying Discriminative LRs with decay {decay}")
+            
+            # Simple assumption: Backbone -> Group params by "layer depth" roughly?
+            # Or just separate Backbone vs Head.
+            # Real ULMFiT slits the backbone into n groups. 
+            # For EfficientNet/MobileNet, we can just treat the whole backbone as "lower learning rate" 
+            # or try to split stages. 
+            # Let's stick to the implementation from fine_tune_distill:
+            # Group 1: Embeddings/Stem (Deepest) -> Low LR
+            # Group 2: Middle Blocks -> Med LR
+            # Group 3: Top Blocks -> Med-High LR
+            # Group 4: Head -> Max LR
+            
+            # Simplified for Generic Backbone: 
+            # Head = LR
+            # Backbone = LR / Decay
+            # CBAM = LR (High Freq needed)
+            
+            grouped_params = [
+                {"params": main_params, "lr": self.cfg.lr / decay},
+                {"params": cbam_params, "lr": self.cfg.lr}, # Keep CBAM fast
+                {"params": head_params, "lr": self.cfg.lr},
+            ]
+        else:
+            grouped_params = [
+                {"params": main_params, "lr": self.cfg.lr * 0.1},
+                {"params": cbam_params, "lr": self.cfg.lr * 10.0},
+                {"params": head_params, "lr": self.cfg.lr},
+            ]
         
         base_optimizer = torch.optim.AdamW(grouped_params, lr=self.cfg.lr, weight_decay=1e-4)
         
         if hasattr(self.cfg, 'use_sam') and self.cfg.use_sam: # Assuming use_sam flag, or add it to config
              # SAM requires a closure, handled in train loop.
              # But assuming we wrap the base optimizer.
-             self.sam = SAM(self.trainable_params, base_optimizer=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
+             self.sam = SAM(grouped_params, base_optimizer_cls=torch.optim.AdamW, lr=self.cfg.lr, weight_decay=1e-4, rho=self.cfg.rho)
              self.optimizer = self.sam # Placeholder alias
              LOGGER.info("Using SAM Optimizer")
         else:
@@ -304,7 +336,29 @@ class ArcFaceTrainer:
         
         step_count = self.step_resumed
 
+        step_count = self.step_resumed
+
         for epoch in range(self.start_epoch, self.cfg.epochs + 1):
+             # --- ULMFiT: Gradual Unfreezing ---
+            if hasattr(self.cfg, 'gradual_unfreezing') and self.cfg.gradual_unfreezing:
+                if epoch == 1:
+                    LOGGER.info("ULMFiT: Epoch 1 - Freezing Backbone, Training Head Only")
+                    self.backbone.eval()
+                    for param in self.backbone.parameters():
+                        param.requires_grad = False
+                    self.head.train()
+                    # Ensure optimizer updates only head? 
+                    # Warning: Optimizer was init with ALL params. 
+                    # If we freeze them, grad is None or 0, so optimizer won't change them effectively (due to weight decay?)
+                    # Generally safer to set requires_grad=False.
+                elif epoch == 2:
+                    LOGGER.info("ULMFiT: Epoch 2 - Unfreezing Backbone (Full Training)")
+                    self.backbone.train()
+                    for param in self.backbone.parameters():
+                        param.requires_grad = True
+                    # In true ULMFiT we unfreeze last layer then next etc. 
+                    # For simplicity in this pivot: Epoch 1 Head, Epoch 2+ All.
+            
             print(f"[HEARTBEAT] Starting Epoch {epoch}...")
             epoch_losses = []
             preds_all, labels_all = [], []
