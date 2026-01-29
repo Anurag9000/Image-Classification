@@ -125,6 +125,10 @@ def main():
         trainer = ArcFaceTrainer(train_loader, val_loader, a_cfg)
         trainer.train()
         print("ArcFace Phase Complete.")
+        
+        # Test Evaluation
+        print("\nRunning Test Set Evaluation...")
+        trainer.test(test_loader)
     
     print("\nAdvanced Pipeline Finished Successfully.")
 
