@@ -127,5 +127,15 @@ def main():
     print("\nAdvanced Pipeline Finished Successfully.")
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    
+    # Setup Logging
+    os.makedirs("./logs", exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        handlers=[
+            logging.FileHandler("./logs/training.log"),
+            logging.StreamHandler()
+        ]
+    )
     main()
