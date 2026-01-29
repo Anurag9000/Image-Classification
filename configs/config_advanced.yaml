@@ -1,8 +1,8 @@
 # Data Config
 dataset:
   root_dirs:
-    - "./data/Dataset_Final"
-  json_path: "./data/Dataset_Final/dataset_metadata.json"
+    - "./data/Augmented_Data_Zip"
+  json_path: "./data/Augmented_Data_Zip/dataset_aug_metadata.json"
   batch_size: 64          # Reverted to 64 as requested
   num_workers: 16
   val_split: 0.1 # 10% Validation
