@@ -53,9 +53,13 @@ def main():
         from pipeline.train_supcon import create_supcon_loader
         
         # SupCon needs Multi-View Loader
+        # We pass dataset_cfg.get('root_dirs')[0] if available, else json_path dir
+        roots = dataset_cfg.get('root_dirs', ["./data"])
+        root_dir = roots[0] if roots else "./data"
+        
         sup_train_loader, sup_val_loader = create_supcon_loader(
             batch_size=int(supcon_cfg_dict.get('batch_size', 64)),
-            root=dataset_cfg.get('json_path'), # Pass json path as root for logic
+            root=root_dir, # Use the actual data root
             num_workers=dataset_cfg.get('num_workers', 4),
             json_path=dataset_cfg.get('json_path')
         )

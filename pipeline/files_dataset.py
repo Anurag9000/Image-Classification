@@ -40,10 +40,26 @@ class JsonDataset(Dataset):
     def __getitem__(self, idx):
         item = self.metadata[idx]
         # Allow absolute or relative paths
-        if os.path.isabs(item['file_path']):
-             img_path = item['file_path']
+        # Allow absolute or relative paths
+        raw_path = item['file_path']
+        # Fix Windows separators if running on Linux
+        if os.name == 'posix':
+            raw_path = raw_path.replace('\\', '/')
+            
+        if os.path.isabs(raw_path):
+             img_path = raw_path
         else:
-             img_path = os.path.join(self.root_dir, item['file_path'])
+             # Basic join
+             img_path = os.path.join(self.root_dir, raw_path)
+             
+             # Fallback: Check if prefix 'Dataset_Final_Aug/' is spurious
+             if not os.path.exists(img_path):
+                 # Try stripping first component if it looks like a parent folder name
+                 parts = raw_path.split('/')
+                 if len(parts) > 1 and not os.path.exists(img_path):
+                     stripped_path = os.path.join(self.root_dir, *parts[1:])
+                     if os.path.exists(stripped_path):
+                         img_path = stripped_path
              
         label_str = item['label']
         label = self.class_to_idx[label_str]
