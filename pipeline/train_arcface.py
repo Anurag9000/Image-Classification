@@ -421,7 +421,7 @@ class ArcFaceTrainer:
                     patience_str = "N/A"
                     acc_str = f"{acc.item():.2f}%"
                     
-                    if self.val_loader and step_count % 500 == 0:
+                    if self.val_loader and step_count % 10 == 0:
                          print(f"[HEARTBEAT] Entering Validation at Step {step_count}...")
                          v_loss, v_acc, v_f1 = self._validate()
                          print(f"[HEARTBEAT] Exited Validation at Step {step_count}.")

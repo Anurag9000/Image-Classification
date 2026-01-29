@@ -135,7 +135,7 @@ class SupConPretrainer:
         self.model.eval()
         val_loss = 0.0
         steps = 0
-        limit_batches = 20 # Optimization: Reduced to 20 for faster feedback
+        limit_batches = 5 # Optimization: Reduced to 5 for frequent 10-step checks
         
         with torch.no_grad():
              for i, (images, labels) in enumerate(self.val_loader):
@@ -243,7 +243,7 @@ class SupConPretrainer:
             # try: ... except RuntimeError: ...
 
             step += 1
-            if step % 100 == 0:
+            if step % 10 == 0:
                 # 1. Run Configured Validation (Subset)
                 val_loss_str = "N/A"
                 patience_str = "N/A"

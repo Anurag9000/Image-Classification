@@ -48,6 +48,7 @@ arcface:
   
   use_sam: true
   use_amp: true
+  val_limit_batches: 10 # Check only 10 batches every 10 steps
 
 # -------------------------------------------------------------------------
 # Phase 3: Distillation (DISABLED)
