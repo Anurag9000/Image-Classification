@@ -33,6 +33,7 @@ supcon:
   use_amp: true # Optimization: Re-enable AMP
   rho: 0.05 # Reset rho (unused without SAM)
   resume_from: "./snapshots_advanced/supcon_final_best.pth" # Resume from last best checkpoint
+  early_stopping_patience: 100 # Optimization: Increase to 100 to prevent premature stopping
 
 # -------------------------------------------------------------------------
 # Phase 2: ArcFace (ULMFiT Fine-Tuning)
