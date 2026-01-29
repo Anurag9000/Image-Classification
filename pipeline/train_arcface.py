@@ -97,7 +97,7 @@ class ArcFaceTrainer:
                  LOGGER.warning("Windows detected: Disabling torch.compile to prevent hangs.")
 
         # Load Pretrained SupCon Weights if available
-        if self.cfg.supcon_snapshot and os.path.exists(self.cfg.supcon_snapshot):
+        if self.cfg.supcon_snapshot and os.path.exists(self.cfg.supcon_snapshot) and not self.cfg.resume_from:
             LOGGER.info(f"Loading SupCon weights from {self.cfg.supcon_snapshot}...")
             try:
                 checkpoint = torch.load(self.cfg.supcon_snapshot, map_location=self.device)
@@ -118,6 +118,21 @@ class ArcFaceTrainer:
                 LOGGER.info("SupCon weights loaded successfully.")
             except Exception as e:
                 LOGGER.error(f"Failed to load SupCon weights: {e}")
+
+        # Resume from Checkpoint (Overwrites SupCon weights if exists)
+        self.step_resumed = 0
+        if self.cfg.resume_from and os.path.exists(self.cfg.resume_from):
+            LOGGER.info(f"Resuming ArcFace from {self.cfg.resume_from}")
+            ckpt = torch.load(self.cfg.resume_from, map_location=self.device)
+            if 'model_state_dict' in ckpt:
+                self.backbone.load_state_dict(ckpt['model_state_dict'])
+            if 'head_state_dict' in ckpt:
+                self.head.load_state_dict(ckpt['head_state_dict'])
+            LOGGER.info("Successfully resumed ArcFace model/head weights.")
+        else:
+             LOGGER.info("No ArcFace resume checkpoint found. Starting fresh (with SupCon init if available).")
+
+        self.start_epoch = 1
 
         if self.cfg.use_curricularface:
             self.head = CurricularFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
