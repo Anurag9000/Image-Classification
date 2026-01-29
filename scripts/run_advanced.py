@@ -75,7 +75,8 @@ def main():
             use_sam=supcon_cfg_dict.get('use_sam', False),
             rho=supcon_cfg_dict.get('rho', 0.05),
             use_amp=supcon_cfg_dict.get('use_amp', True),
-            image_size=224
+            image_size=224,
+            resume_from=supcon_cfg_dict.get('resume_from', None)
         )
         
         trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
