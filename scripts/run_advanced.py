@@ -33,7 +33,7 @@ def main():
     # However, existing repo implies SupConTrainer works with the current loader.
     # We will use the standard loader.
     
-    train_loader, val_loader, _ = create_data_loader(
+    train_loader, val_loader, test_loader = create_data_loader(
         root_dirs=dataset_cfg.get('root_dirs'),
         batch_size=dataset_cfg.get('batch_size', 64),
         num_workers=dataset_cfg.get('num_workers', 4),
