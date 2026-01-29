@@ -32,6 +32,7 @@ supcon:
   snapshot_path: "./snapshots_advanced/supcon_final.pth" # Save here
   use_amp: true # Optimization: Re-enable AMP
   rho: 0.05 # Reset rho (unused without SAM)
+  resume_from: "./snapshots_advanced/supcon_final_best.pth" # Resume from last best checkpoint
 
 # -------------------------------------------------------------------------
 # Phase 2: ArcFace (ULMFiT Fine-Tuning)

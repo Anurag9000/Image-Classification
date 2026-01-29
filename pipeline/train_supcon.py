@@ -38,6 +38,7 @@ class SupConConfig:
     rho: float = 0.05
     early_stopping_patience: int = 10
     val_split: float = 0.1
+    resume_from: Optional[str] = None
 
 
 class SupConPretrainer:
