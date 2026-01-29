@@ -119,6 +119,13 @@ class ArcFaceTrainer:
             except Exception as e:
                 LOGGER.error(f"Failed to load SupCon weights: {e}")
 
+        if self.cfg.use_curricularface:
+            self.head = CurricularFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+            LOGGER.info("Initialized CurricularFace Loss (Adaptive Curriculum).")
+        else:
+            self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
+            LOGGER.info("Initialized AdaFace Loss (Adaptive Margin for low-quality images).")
+
         # Resume from Checkpoint (Overwrites SupCon weights if exists)
         self.step_resumed = 0
         if self.cfg.resume_from and os.path.exists(self.cfg.resume_from):
@@ -133,13 +140,6 @@ class ArcFaceTrainer:
              LOGGER.info("No ArcFace resume checkpoint found. Starting fresh (with SupCon init if available).")
 
         self.start_epoch = 1
-
-        if self.cfg.use_curricularface:
-            self.head = CurricularFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
-            LOGGER.info("Initialized CurricularFace Loss (Adaptive Curriculum).")
-        else:
-            self.head = AdaFace(embedding_size=self.backbone_cfg.fusion_dim, num_classes=self.cfg.num_classes).to(self.device)
-            LOGGER.info("Initialized AdaFace Loss (Adaptive Margin for low-quality images).")
 
         params = [p for p in list(self.backbone.parameters()) + list(self.head.parameters()) if p.requires_grad]
         self.trainable_params = params
