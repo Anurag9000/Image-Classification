@@ -119,7 +119,10 @@ def main():
             rho=arcface_cfg_dict.get('rho', 0.05),
             
             # Link to Phase 1
-            supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth").replace(".pth", "_best.pth") if os.path.exists(supcon_cfg_dict.get('snapshot_path', "").replace(".pth", "_best.pth")) else supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth")
+            supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth").replace(".pth", "_best.pth") if os.path.exists(supcon_cfg_dict.get('snapshot_path', "").replace(".pth", "_best.pth")) else supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth"),
+            
+            # Resume Check (If best model exists, resume from it)
+            resume_from=os.path.join(arcface_cfg_dict.get('snapshot_dir', "./snapshots_advanced"), "best_model.pth") if os.path.exists(os.path.join(arcface_cfg_dict.get('snapshot_dir', "./snapshots_advanced"), "best_model.pth")) else None
         )
         
         trainer = ArcFaceTrainer(train_loader, val_loader, a_cfg)
