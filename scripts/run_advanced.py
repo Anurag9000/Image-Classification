@@ -64,14 +64,17 @@ def main():
             json_path=dataset_cfg.get('json_path')
         )
         
+        
         # Prepare Config
         s_cfg = SupConConfig(
             backbone=backbone_cfg,
-            num_classes=cfg_dict.get('num_classes', 4),
-            epochs=supcon_cfg_dict.get('epochs', 50),
+            steps=int(supcon_cfg_dict.get('steps', 482000)),
             lr=float(supcon_cfg_dict.get('lr', 1e-3)),
             snapshot_path=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth"),
-            batch_size=int(supcon_cfg_dict.get('batch_size', 64))
+            use_sam=supcon_cfg_dict.get('use_sam', False),
+            rho=supcon_cfg_dict.get('rho', 0.05),
+            use_amp=supcon_cfg_dict.get('use_amp', True),
+            image_size=224
         )
         
         trainer = SupConTrainer(sup_train_loader, sup_val_loader, s_cfg)
