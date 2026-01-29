@@ -67,11 +67,13 @@ def main():
         
         
         # Prepare Config
-        best_ckpt = s_cfg.snapshot_path.replace(".pth", "_best.pth")
+        snapshot_path = supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth")
+        best_ckpt = snapshot_path.replace(".pth", "_best.pth")
         resume_path = supcon_cfg_dict.get('resume_from', None)
         
         # Checking for resumption (Mid-SupCon Stop)
-        if not os.path.exists(s_cfg.snapshot_path) and os.path.exists(best_ckpt):
+        # We check paths directly using the string logic, before creating config object
+        if not os.path.exists(snapshot_path) and os.path.exists(best_ckpt):
              print(f"SupCon partial checkpoint found at {best_ckpt}. Resuming Phase 1...")
              resume_path = best_ckpt
         
@@ -79,7 +81,7 @@ def main():
             backbone=backbone_cfg,
             steps=int(supcon_cfg_dict.get('steps', 482000)),
             lr=float(supcon_cfg_dict.get('lr', 1e-3)),
-            snapshot_path=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth"),
+            snapshot_path=snapshot_path,
             use_sam=supcon_cfg_dict.get('use_sam', False),
             rho=supcon_cfg_dict.get('rho', 0.05),
             use_amp=supcon_cfg_dict.get('use_amp', True),
