@@ -3,8 +3,8 @@ dataset:
   root_dirs:
     - "./data/Augmented_Data_Zip"
   json_path: "./data/Augmented_Data_Zip/dataset_aug_metadata.json"
-  batch_size: 32          # Reduced to 16 for 6GB VRAM
-  num_workers: 16          # Reduced to prevent CPU memory overflow
+  batch_size: 32
+  num_workers: 16
   val_split: 0.1 # 10% Validation
   test_split: 0.1 # 10% Hold-out Test
   augment_online: true

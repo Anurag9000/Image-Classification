@@ -61,7 +61,8 @@ def main():
             batch_size=int(supcon_cfg_dict.get('batch_size', 64)),
             root=root_dir, # Use the actual data root
             num_workers=dataset_cfg.get('num_workers', 4),
-            json_path=dataset_cfg.get('json_path')
+            json_path=dataset_cfg.get('json_path'),
+            num_views=4  # CRITICAL: Must match SupConConfig.num_views
         )
         
         
