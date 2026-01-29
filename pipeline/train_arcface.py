@@ -341,18 +341,16 @@ class ArcFaceTrainer:
         for epoch in range(self.start_epoch, self.cfg.epochs + 1):
              # --- ULMFiT: Gradual Unfreezing ---
             if hasattr(self.cfg, 'gradual_unfreezing') and self.cfg.gradual_unfreezing:
-                if epoch == 1:
-                    LOGGER.info("ULMFiT: Epoch 1 - Freezing Backbone, Training Head Only")
+                unfreeze_epoch = getattr(self.cfg, 'unfreeze_epoch', 2) # Default to epoch 2 if not set
+                
+                if epoch < unfreeze_epoch:
+                    LOGGER.info(f"ULMFiT: Epoch {epoch} - Freezing Backbone, Training Head Only")
                     self.backbone.eval()
                     for param in self.backbone.parameters():
                         param.requires_grad = False
                     self.head.train()
-                    # Ensure optimizer updates only head? 
-                    # Warning: Optimizer was init with ALL params. 
-                    # If we freeze them, grad is None or 0, so optimizer won't change them effectively (due to weight decay?)
-                    # Generally safer to set requires_grad=False.
-                elif epoch == 2:
-                    LOGGER.info("ULMFiT: Epoch 2 - Unfreezing Backbone (Full Training)")
+                elif epoch == unfreeze_epoch:
+                    LOGGER.info(f"ULMFiT: Epoch {epoch} - Unfreezing Backbone (Full Training)")
                     self.backbone.train()
                     for param in self.backbone.parameters():
                         param.requires_grad = True
