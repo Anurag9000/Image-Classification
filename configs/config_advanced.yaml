@@ -41,7 +41,7 @@ supcon:
 arcface:
   enabled: true
   epochs: 20
-  lr: 1.0e-4
+  lr: 2.0e-5 # Optimization: Reduced from 1e-4 to 2e-5 for stability with Batch 16
   snapshot_dir: "./snapshots_advanced"
   
   # ULMFiT Strategy
