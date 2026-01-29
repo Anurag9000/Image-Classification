@@ -105,11 +105,15 @@ def main():
             # ULMFiT Stats
             use_ulmfit=arcface_cfg_dict.get('use_ulmfit', False),
             gradual_unfreezing=arcface_cfg_dict.get('gradual_unfreezing', False),
+            unfreeze_epoch=arcface_cfg_dict.get('unfreeze_epoch', 2),
             discriminative_lr_decay=arcface_cfg_dict.get('discriminative_lr_decay', 2.6),
+            val_limit_batches=arcface_cfg_dict.get('val_limit_batches', None),
+            early_stopping_patience=arcface_cfg_dict.get('early_stopping_patience', 5),
             
             # Others
             use_sam=arcface_cfg_dict.get('use_sam', False),
             use_amp=arcface_cfg_dict.get('use_amp', True),
+            rho=arcface_cfg_dict.get('rho', 0.05),
             
             # Link to Phase 1
             supcon_snapshot=supcon_cfg_dict.get('snapshot_path', "./snapshots_advanced/supcon_final.pth") if supcon_cfg_dict.get('enabled') else None

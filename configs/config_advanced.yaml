@@ -43,7 +43,6 @@ arcface:
   # ULMFiT Strategy
   use_ulmfit: true
   gradual_unfreezing: true
-  gradual_unfreezing: true
   unfreeze_epoch: 2 # Epoch 1 Head Only, Epoch 2+ Full (Optimization: 1 epoch is enough for 600k data)
   discriminative_lr_decay: 2.6
   

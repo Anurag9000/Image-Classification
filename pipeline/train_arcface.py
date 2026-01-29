@@ -66,10 +66,14 @@ class ArcFaceConfig:
     supcon_snapshot: Optional[str] = None # Path to pretrained SupCon model to load
     resume_from: Optional[str] = None # Resume from checkpoint
     
+    
     # ULMFiT Settings
     use_ulmfit: bool = False
     gradual_unfreezing: bool = False
+    unfreeze_epoch: int = 2
     discriminative_lr_decay: float = 2.6
+    val_limit_batches: Optional[int] = None
+    rho: float = 0.05
 
 
 class ArcFaceTrainer:
