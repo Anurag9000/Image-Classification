@@ -222,41 +222,67 @@ def create_data_loader(
         
         LOGGER.info(f"Splitting dataset: Train={train_len} (est), Val={val_len} (est), Test={test_len} (est) [Stratified by Class]")
         
-        # Stratified Split Logic
+        # Stratified Split Logic (Group-Aware for Offline Augmentations)
         from collections import defaultdict
-        class_groups = defaultdict(list)
+        import re
+        
+        # Regex to strip _aug_X suffix: 'foo_aug_0.jpg' -> 'foo.jpg'
+        # Assumes format: {base}_aug_{num}.{ext} OR just {base}.{ext}
+        # We need to capture the base name regardless of extension
+        def get_base_name(fname):
+             # Remove extension first
+             base, ext = os.path.splitext(fname)
+             # Remove _aug_N if present
+             base = re.sub(r'_aug_\d+$', '', base)
+             return base
+
+        # Group items by (Label, BaseName)
+        # We want to split based on BaseNames to keep all augs of an image in the same set
+        groups = defaultdict(list)
         for item in full_metadata:
-            class_groups[item['label']].append(item)
+            # We must use file_path (basename) as key
+            fname = os.path.basename(item['file_path'])
+            base = get_base_name(fname)
+            label = item['label']
+            # Group key: (label, base_name) to ensure stratification by label
+            groups[(label, base)].append(item)
 
         train_meta, val_meta, test_meta = [], [], []
         
         # Generator for reproducibility
         g = torch.Generator().manual_seed(42)
 
-        for label, items in class_groups.items():
-            n = len(items)
-            n_val = int(n * val_split)
-            n_test = int(n * test_split)
-            n_train = n - n_val - n_test
+        # Now we iterate over LABELS, collecting all groups belonging to that label
+        label_to_groups = defaultdict(list)
+        for (label, base), items in groups.items():
+            label_to_groups[label].append(items) # items is a list of dicts (variants)
+
+        for label, group_list in label_to_groups.items():
+            n_groups = len(group_list)
             
-            # Ensure at least 1 training sample if possible
-            if n_train == 0 and n > 0:
+            # Decide split counts based on number of UNIQUE IMAGES (groups), not total files
+            n_val = int(n_groups * val_split)
+            n_test = int(n_groups * test_split)
+            n_train = n_groups - n_val - n_test
+            
+            # Ensure at least 1 training sample
+            if n_train == 0 and n_groups > 0:
                 n_train = 1
                 if n_val > 0: n_val -= 1
                 elif n_test > 0: n_test -= 1
             
-            # Shuffle indices for this class
-            indices = torch.randperm(n, generator=g).tolist()
+            # Shuffle groups
+            indices = torch.randperm(n_groups, generator=g).tolist()
             
-            # Slice
+            # Slice indices
             idx_train = indices[:n_train]
             idx_val = indices[n_train : n_train + n_val]
             idx_test = indices[n_train + n_val :]
             
-            for i in idx_train: train_meta.append(items[i])
-            for i in idx_val: val_meta.append(items[i])
-            for i in idx_test: test_meta.append(items[i])
-
+            # Assign all variants in the group to the chosen split
+            for i in idx_train: train_meta.extend(group_list[i])
+            for i in idx_val: val_meta.extend(group_list[i])
+            for i in idx_test: test_meta.extend(group_list[i])
         # Shuffle again to mix classes in the final lists (optional but good for batches)
         # Actually DataLoader shuffles, so not strictly needed, but good for sanity
         
